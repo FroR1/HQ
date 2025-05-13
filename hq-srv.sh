@@ -195,7 +195,7 @@ edit_data() {
     while true; do
         clear
         echo "Текущие значения:"
-        echo "1. Интерфейс LAN: $INTERFACE_LAN"
+        echo "1. Интерфейс VLAN: $INTERFACE_LAN"
         echo "2. IP для LAN: $IP_LAN"
         echo "3. Шлюз по умолчанию: $DEFAULT_GW"
         echo "4. Hostname: $HOSTNAME"
