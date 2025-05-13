@@ -6,7 +6,7 @@
 install_dependencies() {
     echo "Установка зависимостей..."
     apt-get update
-    apt-get install -y iproute2 nftables systemd frr isc-dhcp-server mc wget openssh-server
+    apt-get install -y iproute2 nftables systemd frr dhcp-server mc wget openssh-server
     echo "Зависимости установлены."
 }
 
@@ -277,7 +277,7 @@ EOF
 # Функция настройки DHCP
 configure_dhcp() {
     echo "Настройка DHCP..."
-    apt-get install -y isc-dhcp-server
+    apt-get install -y dhcp-server
     sed -i "s/DHCPDARGS=.*/DHCPDARGS=$DHCP_INTERFACE/" /etc/sysconfig/dhcpd
     cat > /etc/dhcp/dhcpd.conf << EOF
 default-lease-time 6000;
