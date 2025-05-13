@@ -13,7 +13,9 @@ install_dependencies() {
 install_dependencies
 
 # Начальные значения переменных
-INTERFACE_LAN="ens192"
+INTERFACE_LAN_BASE="ens192"
+VLAN_ID=100
+INTERFACE_LAN="ens192.100"
 IP_LAN="192.168.10.2/26"
 DEFAULT_GW="192.168.10.1"
 HOSTNAME="hq-srv.au-team.irpo"
@@ -21,6 +23,7 @@ TIME_ZONE="Asia/Novosibirsk"
 USERNAME="net_admin"
 USER_UID=1010
 BANNER_TEXT="Authorized access only"
+SSH_PORT=22
 DNS_ZONE="au-team.irpo"
 DNS_FILE="au-team.irpo.db"
 REVERSE_ZONE_SRV="10.168.192.in-addr.arpa"
@@ -30,6 +33,8 @@ REVERSE_FILE_CLI="192.168.20.db"
 IP_HQ_RTR="192.168.10.1"
 IP_HQ_SRV="192.168.10.2"
 IP_HQ_CLI="192.168.20.10"
+IP_BR_RTR="172.16.77.2"
+IP_BR_SRV="172.16.15.2"
 
 # Функция проверки существования интерфейса
 check_interface() {
@@ -43,14 +48,25 @@ check_interface() {
 configure_interfaces() {
     echo "Настройка интерфейсов через /etc/net/ifaces/..."
     
-    check_interface "$INTERFACE_LAN"
+    check_interface "$INTERFACE_LAN_BASE"
     
+    # Настройка базового интерфейса
+    mkdir -p /etc/net/ifaces/"$INTERFACE_LAN_BASE"
+    cat > /etc/net/ifaces/"$INTERFACE_LAN_BASE"/options << EOF
+BOOTPROTO=none
+TYPE=eth
+DISABLED=no
+CONFIG_IPV4=yes
+EOF
+    
+    # Настройка VLAN-интерфейса
     mkdir -p /etc/net/ifaces/"$INTERFACE_LAN"
     cat > /etc/net/ifaces/"$INTERFACE_LAN"/options << EOF
 BOOTPROTO=static
 TYPE=eth
 DISABLED=no
 CONFIG_IPV4=yes
+VID=$VLAN_ID
 EOF
     echo "$IP_LAN" > /etc/net/ifaces/"$INTERFACE_LAN"/ipv4address
     echo "default via $DEFAULT_GW" > /etc/net/ifaces/"$INTERFACE_LAN"/ipv4route
@@ -95,10 +111,12 @@ EOF
                 1H            ; ncache
             )
         IN    NS       $DNS_ZONE.
-        IN    A        $IP_HQ_SRV
+        IN    A        127.0.0.0
 hq-rtr  IN    A        $IP_HQ_RTR
+br-rtr  IN    A        $IP_BR_RTR
 hq-srv  IN    A        $IP_HQ_SRV
 hq-cli  IN    A        $IP_HQ_CLI
+br-srv  IN    A        $IP_BR_SRV
 moodle  IN    CNAME    hq-rtr
 wiki    IN    CNAME    hq-rtr
 EOF
@@ -177,17 +195,27 @@ configure_user() {
     fi
 }
 
-# Функция настройки баннера SSH
-configure_ssh_banner() {
-    echo "Настройка баннера SSH..."
+# Функция настройки SSH (порт и баннер)
+configure_ssh() {
+    echo "Настройка SSH..."
+    
+    # Настройка порта SSH
+    if grep -q "^Port" /etc/openssh/sshd_config; then
+        sed -i "s/^Port .*/Port $SSH_PORT/" /etc/openssh/sshd_config
+    else
+        echo "Port $SSH_PORT" >> /etc/openssh/sshd_config
+    fi
+    
+    # Настройка баннера SSH
     echo "$BANNER_TEXT" > /etc/banner
     if grep -q "^Banner" /etc/openssh/sshd_config; then
         sed -i 's|^Banner.*|Banner /etc/banner|' /etc/openssh/sshd_config
     else
         echo "Banner /etc/banner" >> /etc/openssh/sshd_config
     fi
+    
     systemctl restart sshd
-    echo "Баннер SSH настроен."
+    echo "SSH настроен (порт: $SSH_PORT, баннер установлен)."
 }
 
 # Функция редактирования данных
@@ -195,45 +223,68 @@ edit_data() {
     while true; do
         clear
         echo "Текущие значения:"
-        echo "1. Интерфейс VLAN: $INTERFACE_LAN"
-        echo "2. IP для LAN: $IP_LAN"
-        echo "3. Шлюз по умолчанию: $DEFAULT_GW"
-        echo "4. Hostname: $HOSTNAME"
-        echo "5. Часовой пояс: $TIME_ZONE"
-        echo "6. Имя пользователя: $USERNAME"
-        echo "7. UID пользователя: $USER_UID"
-        echo "8. Текст баннера: $BANNER_TEXT"
-        echo "9. DNS зона: $DNS_ZONE"
-        echo "10. IP для hq-rtr: $IP_HQ_RTR"
-        echo "11. IP для hq-srv: $IP_HQ_SRV"
-        echo "12. IP для hq-cli: $IP_HQ_CLI"
+        echo "1. Базовый интерфейс LAN: $INTERFACE_LAN_BASE"
+        echo "2. VLAN ID: $VLAN_ID"
+        echo "3. Интерфейс VLAN LAN: $INTERFACE_LAN"
+        echo "4. IP для LAN: $IP_LAN"
+        echo "5. Шлюз по умолчанию: $DEFAULT_GW"
+        echo "6. Hostname: $HOSTNAME"
+        echo "7. Часовой пояс: $TIME_ZONE"
+        echo "8. Имя пользователя: $USERNAME"
+        echo "9. UID пользователя: $USER_UID"
+        echo "10. Текст баннера: $BANNER_TEXT"
+        echo "11. Порт SSH: $SSH_PORT"
+        echo "12. DNS зона: $DNS_ZONE"
+        echo "13. IP для hq-rtr: $IP_HQ_RTR"
+        echo "14. IP для hq-srv: $IP_HQ_SRV"
+        echo "15. IP для hq-cli: $IP_HQ_CLI"
+        echo "16. IP для br-rtr: $IP_BR_RTR"
+        echo "17. IP для br-srv: $IP_BR_SRV"
         echo "0. Назад"
         read -p "Введите номер параметра для изменения: " choice
         case $choice in
-            1) read -p "Новый интерфейс LAN [$INTERFACE_LAN]: " input
+            1) read -p "Новый базовый интерфейс LAN [$INTERFACE_LAN_BASE]: " input
+               new_base=${input:-$INTERFACE_LAN_BASE}
+               if [ "$new_base" != "$INTERFACE_LAN_BASE" ]; then
+                   INTERFACE_LAN_BASE=$new_base
+                   INTERFACE_LAN="$INTERFACE_LAN_BASE.$VLAN_ID"
+               fi ;;
+            2) read -p "Новый VLAN ID [$VLAN_ID]: " input
+               new_vlan=${input:-$VLAN_ID}
+               if [ "$new_vlan" != "$VLAN_ID" ]; then
+                   VLAN_ID=$new_vlan
+                   INTERFACE_LAN="$INTERFACE_LAN_BASE.$VLAN_ID"
+               fi ;;
+            3) read -p "Новый интерфейс VLAN LAN [$INTERFACE_LAN]: " input
                INTERFACE_LAN=${input:-$INTERFACE_LAN} ;;
-            2) read -p "Новый IP для LAN [$IP_LAN]: " input
+            4) read -p "Новый IP для LAN [$IP_LAN]: " input
                IP_LAN=${input:-$IP_LAN} ;;
-            3) read -p "Новый шлюз по умолчанию [$DEFAULT_GW]: " input
+            5) read -p "Новый шлюз по умолчанию [$DEFAULT_GW]: " input
                DEFAULT_GW=${input:-$DEFAULT_GW} ;;
-            4) read -p "Новый hostname [$HOSTNAME]: " input
+            6) read -p "Новый hostname [$HOSTNAME]: " input
                HOSTNAME=${input:-$HOSTNAME} ;;
-            5) read -p "Новый часовой пояс [$TIME_ZONE]: " input
+            7) read -p "Новый часовой пояс [$TIME_ZONE]: " input
                TIME_ZONE=${input:-$TIME_ZONE} ;;
-            6) read -p "Новое имя пользователя [$USERNAME]: " input
+            8) read -p "Новое имя пользователя [$USERNAME]: " input
                USERNAME=${input:-$USERNAME} ;;
-            7) read -p "Новый UID пользователя [$USER_UID]: " input
+            9) read -p "Новый UID пользователя [$USER_UID]: " input
                USER_UID=${input:-$USER_UID} ;;
-            8) read -p "Новый текст баннера [$BANNER_TEXT]: " input
-               BANNER_TEXT=${input:-$BANNER_TEXT} ;;
-            9) read -p "Новая DNS зона [$DNS_ZONE]: " input
-               DNS_ZONE=${input:-$DNS_ZONE} ;;
-            10) read -p "Новый IP для hq-rtr [$IP_HQ_RTR]: " input
+            10) read -p "Новый текст баннера [$BANNER_TEXT]: " input
+                BANNER_TEXT=${input:-$BANNER_TEXT} ;;
+            11) read -p "Новый порт SSH [$SSH_PORT]: " input
+                SSH_PORT=${input:-$SSH_PORT} ;;
+            12) read -p "Новая DNS зона [$DNS_ZONE]: " input
+                DNS_ZONE=${input:-$DNS_ZONE} ;;
+            13) read -p "Новый IP для hq-rtr [$IP_HQ_RTR]: " input
                 IP_HQ_RTR=${input:-$IP_HQ_RTR} ;;
-            11) read -p "Новый IP для hq-srv [$IP_HQ_SRV]: " input
+            14) read -p "Новый IP для hq-srv [$IP_HQ_SRV]: " input
                 IP_HQ_SRV=${input:-$IP_HQ_SRV} ;;
-            12) read -p "Новый IP для hq-cli [$IP_HQ_CLI]: " input
+            15) read -p "Новый IP для hq-cli [$IP_HQ_CLI]: " input
                 IP_HQ_CLI=${input:-$IP_HQ_CLI} ;;
+            16) read -p "Новый IP для br-rtr [$IP_BR_RTR]: " input
+                IP_BR_RTR=${input:-$IP_BR_RTR} ;;
+            17) read -p "Новый IP для br-srv [$IP_BR_SRV]: " input
+                IP_BR_SRV=${input:-$IP_BR_SRV} ;;
             0) return ;;
             *) echo "Неверный выбор." ;;
         esac
@@ -250,7 +301,7 @@ while true; do
     echo "4. Установить имя хоста"
     echo "5. Установить часовой пояс"
     echo "6. Настроить пользователя"
-    echo "7. Настроить баннер SSH"
+    echo "7. Настроить SSH (порт и баннер)"
     echo "8. Выполнить все настройки"
     echo "0. Выход"
     read -p "Выберите опцию: " option
@@ -261,14 +312,14 @@ while true; do
         4) set_hostname ;;
         5) set_timezone ;;
         6) configure_user ;;
-        7) configure_ssh_banner ;;
+        7) configure_ssh ;;
         8) 
             configure_interfaces
             configure_dns
             set_hostname
             set_timezone
             configure_user
-            configure_ssh_banner
+            configure_ssh
             echo "Все настройки выполнены."
             ;;
         0) echo "Выход."; exit 0 ;;
