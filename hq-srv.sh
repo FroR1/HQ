@@ -6,18 +6,13 @@
 install_dependencies() {
     echo "Установка зависимостей..."
     apt-get update
-    apt-get install -y iproute2 bind bind-utils openssh-server systemd mc wget tzdata
+    apt-get install -y bind bind-utils openssh-server systemd mc wget tzdata
     echo "Зависимости установлены."
 }
 
 install_dependencies
 
 # Начальные значения переменных
-INTERFACE_LAN_BASE="ens192"
-VLAN_ID=100
-INTERFACE_LAN="ens192.100"
-IP_LAN="192.168.10.2/26"
-DEFAULT_GW="192.168.10.1"
 HOSTNAME="hq-srv.au-team.irpo"
 TIME_ZONE="Asia/Novosibirsk"
 USERNAME="net_admin"
@@ -36,21 +31,6 @@ IP_HQ_CLI="192.168.20.10"
 IP_BR_RTR="172.16.77.2"
 IP_BR_SRV="172.16.15.2"
 
-# Функция проверки существования интерфейса
-check_interface() {
-    if ! ip link show "$1" &> /dev/null; then
-        echo "Ошибка: Интерфейс $1 не существует."
-        exit 1
-    fi
-}
-
-# Функция настройки сетевых интерфейсов через /etc/net/ifaces/
-configure_interfaces() {
-
-    systemctl restart network
-    echo "Интерфейсы настроены."
-}
-
 # Функция настройки DNS (BIND)
 configure_dns() {
     echo "Настройка DNS..."
@@ -58,6 +38,17 @@ configure_dns() {
     apt-get install -y bind bind-utils
     systemctl enable --now bind
     
+    # Настройка /etc/bind/options.conf
+    cat > /etc/bind/options.conf << EOF
+options {
+    listen-on { any; };
+    // listen-on-v6 { any; };
+    forward first;
+    forwarders { 77.88.8.8; };
+    allow-query { any; };
+};
+EOF
+
     # Настройка зон в /etc/bind/named.conf.local
     cat > /etc/bind/named.conf.local << EOF
 zone "$DNS_ZONE" {
@@ -87,7 +78,7 @@ EOF
                 1H            ; ncache
             )
         IN    NS       $DNS_ZONE.
-        IN    A        127.0.0.0
+        IN    A        127.0.0.1
 hq-rtr  IN    A        $IP_HQ_RTR
 br-rtr  IN    A        $IP_BR_RTR
 hq-srv  IN    A        $IP_HQ_SRV
@@ -127,6 +118,7 @@ EOF
 EOF
 
     # Проверка синтаксиса зон
+    named-checkconf /etc/bind/options.conf
     named-checkconf /etc/bind/named.conf.local
     named-checkzone "$DNS_ZONE" /etc/bind/"$DNS_FILE"
     named-checkzone "$REVERSE_ZONE_SRV" /etc/bind/"$REVERSE_FILE_SRV"
@@ -134,6 +126,17 @@ EOF
     
     systemctl restart bind
     echo "DNS настроен."
+}
+
+# Функция настройки /etc/resolvconf.conf
+configure_resolv() {
+    echo "Настройка /etc/resolvconf.conf..."
+    echo "name_servers=127.0.0.1" >> /etc/resolvconf.conf
+    resolvconf -u
+    echo "Проверка интернета..."
+    cat /etc/resolv.conf
+    ping -c 4 77.88.8.8
+    echo "/etc/resolvconf.conf настроен и проверка интернета выполнена."
 }
 
 # Функция установки имени хоста
@@ -199,67 +202,44 @@ edit_data() {
     while true; do
         clear
         echo "Текущие значения:"
-        echo "1. Базовый интерфейс LAN: $INTERFACE_LAN_BASE"
-        echo "2. VLAN ID: $VLAN_ID"
-        echo "3. Интерфейс VLAN LAN: $INTERFACE_LAN"
-        echo "4. IP для LAN: $IP_LAN"
-        echo "5. Шлюз по умолчанию: $DEFAULT_GW"
-        echo "6. Hostname: $HOSTNAME"
-        echo "7. Часовой пояс: $TIME_ZONE"
-        echo "8. Имя пользователя: $USERNAME"
-        echo "9. UID пользователя: $USER_UID"
-        echo "10. Текст баннера: $BANNER_TEXT"
-        echo "11. Порт SSH: $SSH_PORT"
-        echo "12. DNS зона: $DNS_ZONE"
-        echo "13. IP для hq-rtr: $IP_HQ_RTR"
-        echo "14. IP для hq-srv: $IP_HQ_SRV"
-        echo "15. IP для hq-cli: $IP_HQ_CLI"
-        echo "16. IP для br-rtr: $IP_BR_RTR"
-        echo "17. IP для br-srv: $IP_BR_SRV"
+        echo "1. Hostname: $HOSTNAME"
+        echo "2. Часовой пояс: $TIME_ZONE"
+        echo "3. Имя пользователя: $USERNAME"
+        echo "4. UID пользователя: $USER_UID"
+        echo "5. Текст баннера: $BANNER_TEXT"
+        echo "6. Порт SSH: $SSH_PORT"
+        echo "7. DNS зона: $DNS_ZONE"
+        echo "8. IP для hq-rtr: $IP_HQ_RTR"
+        echo "9. IP для hq-srv: $IP_HQ_SRV"
+        echo "10. IP для hq-cli: $IP_HQ_CLI"
+        echo "11. IP для br-rtr: $IP_BR_RTR"
+        echo "12. IP для br-srv: $IP_BR_SRV"
         echo "0. Назад"
         read -p "Введите номер параметра для изменения: " choice
         case $choice in
-            1) read -p "Новый базовый интерфейс LAN [$INTERFACE_LAN_BASE]: " input
-               new_base=${input:-$INTERFACE_LAN_BASE}
-               if [ "$new_base" != "$INTERFACE_LAN_BASE" ]; then
-                   INTERFACE_LAN_BASE=$new_base
-                   INTERFACE_LAN="$INTERFACE_LAN_BASE.$VLAN_ID"
-               fi ;;
-            2) read -p "Новый VLAN ID [$VLAN_ID]: " input
-               new_vlan=${input:-$VLAN_ID}
-               if [ "$new_vlan" != "$VLAN_ID" ]; then
-                   VLAN_ID=$new_vlan
-                   INTERFACE_LAN="$INTERFACE_LAN_BASE.$VLAN_ID"
-               fi ;;
-            3) read -p "Новый интерфейс VLAN LAN [$INTERFACE_LAN]: " input
-               INTERFACE_LAN=${input:-$INTERFACE_LAN} ;;
-            4) read -p "Новый IP для LAN [$IP_LAN]: " input
-               IP_LAN=${input:-$IP_LAN} ;;
-            5) read -p "Новый шлюз по умолчанию [$DEFAULT_GW]: " input
-               DEFAULT_GW=${input:-$DEFAULT_GW} ;;
-            6) read -p "Новый hostname [$HOSTNAME]: " input
+            1) read -p "Новый hostname [$HOSTNAME]: " input
                HOSTNAME=${input:-$HOSTNAME} ;;
-            7) read -p "Новый часовой пояс [$TIME_ZONE]: " input
+            2) read -p "Новый часовой пояс [$TIME_ZONE]: " input
                TIME_ZONE=${input:-$TIME_ZONE} ;;
-            8) read -p "Новое имя пользователя [$USERNAME]: " input
+            3) read -p "Новое имя пользователя [$USERNAME]: " input
                USERNAME=${input:-$USERNAME} ;;
-            9) read -p "Новый UID пользователя [$USER_UID]: " input
+            4) read -p "Новый UID пользователя [$USER_UID]: " input
                USER_UID=${input:-$USER_UID} ;;
-            10) read -p "Новый текст баннера [$BANNER_TEXT]: " input
-                BANNER_TEXT=${input:-$BANNER_TEXT} ;;
-            11) read -p "Новый порт SSH [$SSH_PORT]: " input
-                SSH_PORT=${input:-$SSH_PORT} ;;
-            12) read -p "Новая DNS зона [$DNS_ZONE]: " input
-                DNS_ZONE=${input:-$DNS_ZONE} ;;
-            13) read -p "Новый IP для hq-rtr [$IP_HQ_RTR]: " input
-                IP_HQ_RTR=${input:-$IP_HQ_RTR} ;;
-            14) read -p "Новый IP для hq-srv [$IP_HQ_SRV]: " input
-                IP_HQ_SRV=${input:-$IP_HQ_SRV} ;;
-            15) read -p "Новый IP для hq-cli [$IP_HQ_CLI]: " input
+            5) read -p "Новый текст баннера [$BANNER_TEXT]: " input
+               BANNER_TEXT=${input:-$BANNER_TEXT} ;;
+            6) read -p "Новый порт SSH [$SSH_PORT]: " input
+               SSH_PORT=${input:-$SSH_PORT} ;;
+            7) read -p "Новая DNS зона [$DNS_ZONE]: " input
+               DNS_ZONE=${input:-$DNS_ZONE} ;;
+            8) read -p "Новый IP для hq-rtr [$IP_HQ_RTR]: " input
+               IP_HQ_RTR=${input:-$IP_HQ_RTR} ;;
+            9) read -p "Новый IP для hq-srv [$IP_HQ_SRV]: " input
+               IP_HQ_SRV=${input:-$IP_HQ_SRV} ;;
+            10) read -p "Новый IP для hq-cli [$IP_HQ_CLI]: " input
                 IP_HQ_CLI=${input:-$IP_HQ_CLI} ;;
-            16) read -p "Новый IP для br-rtr [$IP_BR_RTR]: " input
+            11) read -p "Новый IP для br-rtr [$IP_BR_RTR]: " input
                 IP_BR_RTR=${input:-$IP_BR_RTR} ;;
-            17) read -p "Новый IP для br-srv [$IP_BR_SRV]: " input
+            12) read -p "Новый IP для br-srv [$IP_BR_SRV]: " input
                 IP_BR_SRV=${input:-$IP_BR_SRV} ;;
             0) return ;;
             *) echo "Неверный выбор." ;;
@@ -272,8 +252,8 @@ while true; do
     clear
     echo -e "\nМеню настройки HQ-SRV:"
     echo "1. Редактировать данные"
-    echo "2. Настроить сетевые интерфейсы"
-    echo "3. Настроить DNS (BIND)"
+    echo "2. Настроить DNS (BIND)"
+    echo "3. Настроить /etc/resolvconf.conf"
     echo "4. Установить имя хоста"
     echo "5. Установить часовой пояс"
     echo "6. Настроить пользователя"
@@ -283,15 +263,15 @@ while true; do
     read -p "Выберите опцию: " option
     case $option in
         1) edit_data ;;
-        2) configure_interfaces ;;
-        3) configure_dns ;;
+        2) configure_dns ;;
+        3) configure_resolv ;;
         4) set_hostname ;;
         5) set_timezone ;;
         6) configure_user ;;
         7) configure_ssh ;;
         8) 
-            configure_interfaces
             configure_dns
+            configure_resolv
             set_hostname
             set_timezone
             configure_user
