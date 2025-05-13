@@ -6,7 +6,7 @@
 install_dependencies() {
     echo "Установка зависимостей..."
     apt-get update
-    apt-get install -y iproute2 nftables systemd frr isc-dhcp-server
+    apt-get install -y iproute2 nftables systemd frr isc-dhcp-server mc wget openssh-server
     echo "Зависимости установлены."
 }
 
@@ -25,8 +25,7 @@ DEFAULT_GW="172.16.4.1"
 HOSTNAME="hq-rtr.au-team.irpo"
 TIME_ZONE="Asia/Novosibirsk"
 USERNAME="net_admin"
-UID=1010
-PASSWORD="P@$$word"
+USER_UID=1010
 BANNER_TEXT="Authorized access only"
 TUNNEL_LOCAL_IP="172.16.4.2"
 TUNNEL_REMOTE_IP="172.16.5.2"
@@ -39,60 +38,218 @@ DHCP_RANGE_START="192.168.20.10"
 DHCP_RANGE_END="192.168.20.11"
 DHCP_DNS="192.168.10.2"
 
-# Функция настройки сетевых интерфейсов
+# Функция проверки существования интерфейса
+check_interface() {
+    if ! ip link show "$1" &> /dev/null; then
+        echo "Ошибка: Интерфейс $1 не существует."
+        exit 1
+    fi
+}
+
+# Функция вычисления сети из IP и маски
+get_network() {
+    local ip_mask=$1
+    local ip=$(echo "$ip_mask" | cut -d'/' -f1)
+    local mask=$(echo "$ip_mask" | cut -d'/' -f2)
+    local IFS='.'
+    read -r i1 i2 i3 i4 <<< "$ip"
+    local bits=$((32 - mask))
+    local net=$(( (i1 << 24) + (i2 << 16) + (i3 << 8) + i4 ))
+    local net=$(( net >> bits << bits ))
+    echo "$(( (net >> 24) & 255 )).$(( (net >> 16) & 255 )).$(( (net >> 8) & 255 )).$(( net & 255 ))/$mask"
+}
+
+# Функция настройки сетевых интерфейсов через /etc/net/ifaces/
 configure_interfaces() {
-    echo "Настройка интерфейсов..."
-    ip addr add "$IP_ISP" dev "$INTERFACE_ISP"
-    ip link set "$INTERFACE_ISP" up
-    ip route add default via "$DEFAULT_GW"
-    ip addr add "$IP_VLAN_SRV" dev "$INTERFACE_VLAN_SRV"
-    ip link set "$INTERFACE_VLAN_SRV" up
-    ip addr add "$IP_VLAN_CLI" dev "$INTERFACE_VLAN_CLI"
-    ip link set "$INTERFACE_VLAN_CLI" up
-    ip addr add "$IP_VLAN_MGMT" dev "$INTERFACE_VLAN_MGMT"
-    ip link set "$INTERFACE_VLAN_MGMT" up
+    echo "Настройка интерфейсов через /etc/net/ifaces/..."
+    
+    check_interface "$INTERFACE_ISP"
+    check_interface "ens224"  # Базовый интерфейс для VLAN
+    
+    # Настройка интерфейса ISP
+    mkdir -p /etc/net/ifaces/"$INTERFACE_ISP"
+    cat > /etc/net/ifaces/"$INTERFACE_ISP"/options << EOF
+BOOTPROTO=static
+TYPE=eth
+DISABLED=no
+CONFIG_IPV4=yes
+EOF
+    echo "$IP_ISP" > /etc/net/ifaces/"$INTERFACE_ISP"/ipv4address
+    echo "default via $DEFAULT_GW" > /etc/net/ifaces/"$INTERFACE_ISP"/ipv4route
+    
+    # Настройка базового интерфейса для VLAN
+    mkdir -p /etc/net/ifaces/ens224
+    cat > /etc/net/ifaces/ens224/options << EOF
+BOOTPROTO=none
+TYPE=eth
+DISABLED=no
+CONFIG_IPV4=yes
+EOF
+    
+    # Настройка VLAN интерфейсов
+    for vlan in 100 200 999; do
+        iface="ens224.$vlan"
+        ip_addr_var="IP_VLAN_${vlan}"
+        eval ip_addr=\$$ip_addr_var
+        mkdir -p /etc/net/ifaces/"$iface"
+        cat > /etc/net/ifaces/"$iface"/options << EOF
+BOOTPROTO=static
+TYPE=eth
+DISABLED=no
+CONFIG_IPV4=yes
+VID=$vlan
+EOF
+        echo "$ip_addr" > /etc/net/ifaces/"$iface"/ipv4address
+    done
+    
+    systemctl restart network
     echo "Интерфейсы настроены."
 }
 
-# Функция настройки NAT
-configure_nftables() {
-    echo "Настройка NAT..."
-    sysctl -w net.ipv4.ip_forward=1
-    nft add table inet nat
-    nft add chain inet nat postrouting '{ type nat hook postrouting priority 100 ; policy accept ; }'
-    nft add rule inet nat postrouting ip saddr 192.168.20.0/28 oifname "$INTERFACE_ISP" masquerade
-    nft add rule inet nat postrouting ip saddr 192.168.10.0/26 oifname "$INTERFACE_ISP" masquerade
-    nft add rule inet nat postrouting ip saddr 192.168.99.0/29 oifname "$INTERFACE_ISP" masquerade
-    systemctl enable nftables
-    systemctl restart nftables
-    echo "NAT настроен."
-}
-
-# Функция настройки GRE-туннеля
+# Функция настройки GRE-туннеля через /etc/net/ifaces/
 configure_tunnel() {
-    echo "Настройка GRE-туннеля..."
+    echo "Настройка GRE-туннеля через /etc/net/ifaces/..."
+    
+    modprobe gre
+    
+    mkdir -p /etc/net/ifaces/"$TUNNEL_NAME"
+    cat > /etc/net/ifaces/"$TUNNEL_NAME"/options << EOF
+TYPE=iptun
+TUNTYPE=gre
+TUNLOCAL=$TUNNEL_LOCAL_IP
+TUNREMOTE=$TUNNEL_REMOTE_IP
+TUNOPTIONS='ttl 64'
+HOST=$INTERFACE_ISP
+BOOTPROTO=static
+DISABLED=no
+CONFIG_IPV4=yes
+EOF
+    echo "$TUNNEL_IP" > /etc/net/ifaces/"$TUNNEL_NAME"/ipv4address
+    
+    ip link set "$TUNNEL_NAME" down 2>/dev/null || true
+    ip tunnel del "$TUNNEL_NAME" 2>/dev/null || true
     ip tunnel add "$TUNNEL_NAME" mode gre local "$TUNNEL_LOCAL_IP" remote "$TUNNEL_REMOTE_IP" ttl 64
     ip addr add "$TUNNEL_IP" dev "$TUNNEL_NAME"
     ip link set "$TUNNEL_NAME" up
+    
+    systemctl restart network
     echo "GRE-туннель настроен."
+}
+
+# Функция настройки nftables и пересылки IP
+configure_nftables() {
+    echo "Настройка nftables и пересылки IP..."
+    
+    apt-get install -y nftables
+    
+    sysctl -w net.ipv4.ip_forward=1
+    if grep -q "net.ipv4.ip_forward" /etc/net/sysctl.conf; then
+        sed -i 's/net.ipv4.ip_forward.*/net.ipv4.ip_forward=1/' /etc/net/sysctl.conf
+    else
+        echo "net.ipv4.ip_forward=1" >> /etc/net/sysctl.conf
+    fi
+    
+    cat > /etc/nftables/nftables.nft << EOF
+#!/usr/sbin/nft -f
+flush ruleset
+
+table ip nat {
+    chain postrouting {
+        type nat hook postrouting priority 0; policy accept;
+        ip saddr 192.168.10.0/26 oifname "$INTERFACE_ISP" counter masquerade
+        ip saddr 192.168.20.0/28 oifname "$INTERFACE_ISP" counter masquerade
+        ip saddr 192.168.99.0/29 oifname "$INTERFACE_ISP" counter masquerade
+    }
+}
+EOF
+    
+    nft -f /etc/nftables/nftables.nft
+    systemctl enable --now nftables
+    echo "nftables и пересылка IP настроены."
+}
+
+# Функция установки имени хоста
+set_hostname() {
+    echo "Установка имени хоста..."
+    hostnamectl set-hostname "$HOSTNAME"
+    echo "$HOSTNAME" > /etc/hostname
+    echo "Имя хоста установлено: $HOSTNAME"
+}
+
+# Функция установки часового пояса
+set_timezone() {
+    echo "Установка часового пояса..."
+    apt-get install -y tzdata
+    timedatectl set-timezone "$TIME_ZONE"
+    echo "Часовой пояс установлен: $TIME_ZONE"
+}
+
+# Функция настройки пользователя
+configure_user() {
+    echo "Настройка пользователя..."
+    if [ -z "$USER_UID" ]; then
+        read -p "Введите UID для пользователя $USERNAME: " USER_UID
+    fi
+    if adduser --uid "$USER_UID" "$USERNAME"; then
+        read -s -p "Введите пароль для пользователя $USERNAME: " PASSWORD
+        echo
+        echo "$USERNAME:$PASSWORD" | chpasswd
+        echo "$USERNAME ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers
+        usermod -aG wheel "$USERNAME"
+        echo "Пользователь $USERNAME создан с UID $USER_UID и правами sudo."
+    else
+        echo "Ошибка: Не удалось создать пользователя $USERNAME."
+        exit 1
+    fi
+}
+
+# Функция настройки баннера SSH
+configure_ssh_banner() {
+    echo "Настройка баннера SSH..."
+    echo "$BANNER_TEXT" > /etc/banner
+    if grep -q "^Banner" /etc/openssh/sshd_config; then
+        sed -i 's|^Banner.*|Banner /etc/banner|' /etc/openssh/sshd_config
+    else
+        echo "Banner /etc/banner" >> /etc/openssh/sshd_config
+    fi
+    systemctl restart sshd
+    echo "Баннер SSH настроен."
 }
 
 # Функция настройки OSPF
 configure_ospf() {
     echo "Настройка OSPF..."
-    sed -i 's/ospfd=no/ospfd=yes/' /etc/frr/daemons
+    
+    TUNNEL_NETWORK=$(get_network "$TUNNEL_IP")
+    VLAN_SRV_NETWORK=$(get_network "$IP_VLAN_SRV")
+    VLAN_CLI_NETWORK=$(get_network "$IP_VLAN_CLI")
+    VLAN_MGMT_NETWORK=$(get_network "$IP_VLAN_MGMT")
+    
+    if grep -q "ospfd=no" /etc/frr/daemons; then
+        sed -i 's/ospfd=no/ospfd=yes/' /etc/frr/daemons
+    elif ! grep -q "ospfd=yes" /etc/frr/daemons; then
+        echo "ospfd=yes" >> /etc/frr/daemons
+    fi
     systemctl enable --now frr
+    
     vtysh << EOF
 configure terminal
 router ospf
-network 172.16.100.0/28 area 0
-network 192.168.10.0/26 area 0
-network 192.168.20.0/28 area 0
-network 192.168.99.0/29 area 0
+passive-interface default
+network $TUNNEL_NETWORK area 0
+network $VLAN_SRV_NETWORK area 0
+network $VLAN_CLI_NETWORK area 0
+network $VLAN_MGMT_NETWORK area 0
+exit
+interface $TUNNEL_NAME
+no ip ospf passive
+ip ospf authentication-key PLAINPAS
+ip ospf authentication
 exit
 do wr mem
 exit
 EOF
+    
     echo "OSPF настроен."
 }
 
@@ -118,35 +275,6 @@ EOF
     echo "DHCP настроен."
 }
 
-# Функция установки hostname
-set_hostname() {
-    echo "Установка hostname..."
-    hostnamectl set-hostname "$HOSTNAME"
-    echo "Hostname установлен."
-}
-
-# Функция установки часового пояса
-set_timezone() {
-    echo "Установка часового пояса..."
-    timedatectl set-timezone "$TIME_ZONE"
-    echo "Часовой пояс установлен."
-}
-
-# Функция создания пользователя
-configure_user() {
-    echo "Создание пользователя..."
-    useradd -m -u "$UID" -s /bin/bash "$USERNAME"
-    echo "$USERNAME:$PASSWORD" | chpasswd
-    echo "Пользователь $USERNAME создан."
-}
-
-# Функция настройки баннера
-configure_banner() {
-    echo "Настройка баннера..."
-    echo "$BANNER_TEXT" > /etc/issue
-    echo "Баннер настроен."
-}
-
 # Функция редактирования данных
 edit_data() {
     while true; do
@@ -164,18 +292,17 @@ edit_data() {
         echo "10. Hostname: $HOSTNAME"
         echo "11. Часовой пояс: $TIME_ZONE"
         echo "12. Имя пользователя: $USERNAME"
-        echo "13. UID пользователя: $UID"
-        echo "14. Пароль пользователя: $PASSWORD"
-        echo "15. Текст баннера: $BANNER_TEXT"
-        echo "16. Локальный IP для туннеля: $TUNNEL_LOCAL_IP"
-        echo "17. Удаленный IP для туннеля: $TUNNEL_REMOTE_IP"
-        echo "18. IP для туннеля: $TUNNEL_IP"
-        echo "19. Интерфейс для DHCP: $DHCP_INTERFACE"
-        echo "20. Подсеть для DHCP: $DHCP_SUBNET"
-        echo "21. Маска для DHCP: $DHCP_NETMASK"
-        echo "22. Начало диапазона DHCP: $DHCP_RANGE_START"
-        echo "23. Конец диапазона DHCP: $DHCP_RANGE_END"
-        echo "24. DNS для DHCP: $DHCP_DNS"
+        echo "13. UID пользователя: $USER_UID"
+        echo "14. Текст баннера: $BANNER_TEXT"
+        echo "15. Локальный IP для туннеля: $TUNNEL_LOCAL_IP"
+        echo "16. Удаленный IP для туннеля: $TUNNEL_REMOTE_IP"
+        echo "17. IP для туннеля: $TUNNEL_IP"
+        echo "18. Интерфейс для DHCP: $DHCP_INTERFACE"
+        echo "19. Подсеть для DHCP: $DHCP_SUBNET"
+        echo "20. Маска для DHCP: $DHCP_NETMASK"
+        echo "21. Начало диапазона DHCP: $DHCP_RANGE_START"
+        echo "22. Конец диапазона DHCP: $DHCP_RANGE_END"
+        echo "23. DNS для DHCP: $DHCP_DNS"
         echo "0. Назад"
         read -p "Введите номер параметра для изменения: " choice
         case $choice in
@@ -203,29 +330,27 @@ edit_data() {
                 TIME_ZONE=${input:-$TIME_ZONE} ;;
             12) read -p "Новое имя пользователя [$USERNAME]: " input
                 USERNAME=${input:-$USERNAME} ;;
-            13) read -p "Новый UID пользователя [$UID]: " input
-                UID=${input:-$UID} ;;
-            14) read -p "Новый пароль пользователя [$PASSWORD]: " input
-                PASSWORD=${input:-$PASSWORD} ;;
-            15) read -p "Новый текст баннера [$BANNER_TEXT]: " input
+            13) read -p "Новый UID пользователя [$USER_UID]: " input
+                USER_UID=${input:-$USER_UID} ;;
+            14) read -p "Новый текст баннера [$BANNER_TEXT]: " input
                 BANNER_TEXT=${input:-$BANNER_TEXT} ;;
-            16) read -p "Новый локальный IP для туннеля [$TUNNEL_LOCAL_IP]: " input
+            15) read -p "Новый локальный IP для туннеля [$TUNNEL_LOCAL_IP]: " input
                 TUNNEL_LOCAL_IP=${input:-$TUNNEL_LOCAL_IP} ;;
-            17) read -p "Новый удаленный IP для туннеля [$TUNNEL_REMOTE_IP]: " input
+            16) read -p "Новый удаленный IP для туннеля [$TUNNEL_REMOTE_IP]: " input
                 TUNNEL_REMOTE_IP=${input:-$TUNNEL_REMOTE_IP} ;;
-            18) read -p "Новый IP для туннеля [$TUNNEL_IP]: " input
+            17) read -p "Новый IP для туннеля [$TUNNEL_IP]: " input
                 TUNNEL_IP=${input:-$TUNNEL_IP} ;;
-            19) read -p "Новый интерфейс для DHCP [$DHCP_INTERFACE]: " input
+            18) read -p "Новый интерфейс для DHCP [$DHCP_INTERFACE]: " input
                 DHCP_INTERFACE=${input:-$DHCP_INTERFACE} ;;
-            20) read -p "Новая подсеть для DHCP [$DHCP_SUBNET]: " input
+            19) read -p "Новая подсеть для DHCP [$DHCP_SUBNET]: " input
                 DHCP_SUBNET=${input:-$DHCP_SUBNET} ;;
-            21) read -p "Новая маска для DHCP [$DHCP_NETMASK]: " input
+            20) read -p "Новая маска для DHCP [$DHCP_NETMASK]: " input
                 DHCP_NETMASK=${input:-$DHCP_NETMASK} ;;
-            22) read -p "Новое начало диапазона DHCP [$DHCP_RANGE_START]: " input
+            21) read -p "Новое начало диапазона DHCP [$DHCP_RANGE_START]: " input
                 DHCP_RANGE_START=${input:-$DHCP_RANGE_START} ;;
-            23) read -p "Новый конец диапазона DHCP [$DHCP_RANGE_END]: " input
+            22) read -p "Новый конец диапазона DHCP [$DHCP_RANGE_END]: " input
                 DHCP_RANGE_END=${input:-$DHCP_RANGE_END} ;;
-            24) read -p "Новый DNS для DHCP [$DHCP_DNS]: " input
+            23) read -p "Новый DNS для DHCP [$DHCP_DNS]: " input
                 DHCP_DNS=${input:-$DHCP_DNS} ;;
             0) return ;;
             *) echo "Неверный выбор." ;;
@@ -239,14 +364,14 @@ while true; do
     echo -e "\nМеню настройки HQ-RTR:"
     echo "1. Редактировать данные"
     echo "2. Настроить сетевые интерфейсы"
-    echo "3. Настроить NAT и IP forwarding"
+    echo "3. Настроить NAT и пересылку IP"
     echo "4. Настроить GRE-туннель"
     echo "5. Настроить OSPF"
     echo "6. Настроить DHCP"
-    echo "7. Установить hostname"
+    echo "7. Установить имя хоста"
     echo "8. Установить часовой пояс"
     echo "9. Настроить пользователя"
-    echo "10. Настроить баннер"
+    echo "10. Настроить баннер SSH"
     echo "11. Выполнить все настройки"
     echo "0. Выход"
     read -p "Выберите опцию: " option
@@ -260,7 +385,7 @@ while true; do
         7) set_hostname ;;
         8) set_timezone ;;
         9) configure_user ;;
-        10) configure_banner ;;
+        10) configure_ssh_banner ;;
         11) 
             configure_interfaces
             configure_nftables
@@ -270,7 +395,7 @@ while true; do
             set_hostname
             set_timezone
             configure_user
-            configure_banner
+            configure_ssh_banner
             echo "Все настройки выполнены."
             ;;
         0) echo "Выход."; exit 0 ;;
