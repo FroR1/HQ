@@ -512,7 +512,7 @@ while true; do
     echo "10. Настроить баннер SSH"
     echo "11. Выполнить все настройки"
     echo "0. Выход"
-    echo "99. Это то самое что мы хотели"
+    echo "99. Если стало скучно"
     read -p "Выберите опцию: " option
     case $option in
         1) edit_data ;;
