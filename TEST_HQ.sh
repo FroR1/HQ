@@ -142,6 +142,11 @@ configure_nftables() {
     
     apt-get install -y nftables
     
+    # Вычисление сетей для NAT
+    VLAN_SRV_NETWORK=$(get_network "$IP_VLAN_SRV")
+    VLAN_CLI_NETWORK=$(get_network "$IP_VLAN_CLI")
+    VLAN_MGMT_NETWORK=$(get_network "$IP_VLAN_MGMT")
+    
     sysctl -w net.ipv4.ip_forward=1
     if grep -q "net.ipv4.ip_forward" /etc/net/sysctl.conf; then
         sed -i 's/net.ipv4.ip_forward.*/net.ipv4.ip_forward=1/' /etc/net/sysctl.conf
@@ -156,9 +161,9 @@ flush ruleset
 table ip nat {
     chain postrouting {
         type nat hook postrouting priority 0; policy accept;
-        ip saddr 192.168.10.0/26 oifname "$INTERFACE_ISP" counter masquerade
-        ip saddr 192.168.20.0/28 oifname "$INTERFACE_ISP" counter masquerade
-        ip saddr 192.168.99.0/29 oifname "$INTERFACE_ISP" counter masquerade
+        ip saddr $VLAN_SRV_NETWORK oifname "$INTERFACE_ISP" counter masquerade
+        ip saddr $VLAN_CLI_NETWORK oifname "$INTERFACE_ISP" counter masquerade
+        ip saddr $VLAN_MGMT_NETWORK oifname "$INTERFACE_ISP" counter masquerade
     }
 }
 EOF
