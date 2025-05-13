@@ -6,7 +6,7 @@
 install_dependencies() {
     echo "Установка зависимостей..."
     apt-get update
-    apt-get install -y iproute2 nftables systemd frr dhcp-server mc wget openssh-server
+    apt-get install -y iproute2 nftables systemd frr dhcp-server mc wget openssh-server sudo
     echo "Зависимости установлены."
 }
 
