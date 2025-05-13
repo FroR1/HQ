@@ -132,7 +132,7 @@ EOF
     named-checkzone "$REVERSE_ZONE_SRV" /etc/bind/"$REVERSE_FILE_SRV"
     named-checkzone "$REVERSE_ZONE_CLI" /etc/bind/"$REVERSE_FILE_CLI"
     
-    systemctl restart bind9
+    systemctl restart bind
     echo "DNS настроен."
 }
 
