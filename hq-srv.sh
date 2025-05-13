@@ -38,8 +38,46 @@ configure_dns() {
     apt-get install -y bind bind-utils
     systemctl enable --now bind
     
-    # Настройка /etc/bind/options.conf
-    cat > /etc/bind/options.conf << EOF
+    # Модификация /etc/bind/options.conf
+    echo "Модификация параметров в /etc/bind/options.conf..."
+    if [ -f /etc/bind/options.conf ]; then
+        # Установка или обновление listen-on
+        if grep -q "^[[:space:]]*listen-on[[:space:]]*{" /etc/bind/options.conf; then
+            sed -i 's/^[[:space:]]*listen-on[[:space:]]*{.*};/    listen-on { any; };/' /etc/bind/options.conf
+        else
+            echo "    listen-on { any; };" >> /etc/bind/options.conf
+        fi
+        
+        # Закомментирование listen-on-v6
+        if grep -q "^[[:space:]]*listen-on-v6[[:space:]]*{.*};" /etc/bind/options.conf; then
+            sed -i 's/^[[:space:]]*listen-on-v6[[:space:]]*{.*};/    \/\/ listen-on-v6 { any; };/' /etc/bind/options.conf
+        else
+            echo "    // listen-on-v6 { any; };" >> /etc/bind/options.conf
+        fi
+        
+        # Изменение forward only на forward first
+        if grep -q "^[[:space:]]*forward[[:space:]]*only;" /etc/bind/options.conf; then
+            sed -i 's/^[[:space:]]*forward[[:space:]]*only;/    forward first;/' /etc/bind/options.conf
+        elif ! grep -q "^[[:space:]]*forward[[:space:]]*first;" /etc/bind/options.conf; then
+            echo "    forward first;" >> /etc/bind/options.conf
+        fi
+        
+        # Установка forwarders без комментариев
+        if grep -q "^[[:space:]]*forwarders[[:space:]]*{.*};" /etc/bind/options.conf; then
+            sed -i 's/^[[:space:]]*\/\/*[[:space:]]*forwarders[[:space:]]*{.*};/    forwarders { 77.88.8.8; };/' /etc/bind/options.conf
+        else
+            echo "    forwarders { 77.88.8.8; };" >> /etc/bind/options.conf
+        fi
+        
+        # Установка allow-query без комментариев
+        if grep -q "^[[:space:]]*allow-query[[:space:]]*{.*};" /etc/bind/options.conf; then
+            sed -i 's/^[[:space:]]*\/\/*[[:space:]]*allow-query[[:space:]]*{.*};/    allow-query { any; };/' /etc/bind/options.conf
+        else
+            echo "    allow-query { any; };" >> /etc/bind/options.conf
+        fi
+    else
+        echo "Файл /etc/bind/options.conf не найден, создаю новый..."
+        cat > /etc/bind/options.conf << EOF
 options {
     listen-on { any; };
     // listen-on-v6 { any; };
@@ -48,6 +86,7 @@ options {
     allow-query { any; };
 };
 EOF
+    fi
 
     # Настройка зон в /etc/bind/named.conf.local
     cat > /etc/bind/named.conf.local << EOF
