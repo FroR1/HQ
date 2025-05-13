@@ -46,30 +46,7 @@ check_interface() {
 
 # Функция настройки сетевых интерфейсов через /etc/net/ifaces/
 configure_interfaces() {
-    echo "Настройка интерфейсов через /etc/net/ifaces/..."
-    
-    check_interface "$INTERFACE_LAN_BASE"
-    
-    # Настройка базового интерфейса
-    mkdir -p /etc/net/ifaces/"$INTERFACE_LAN_BASE"
-    cat > /etc/net/ifaces/"$INTERFACE_LAN_BASE"/options << EOF
-TYPE=eth
-DISABLED=no
-CONFIG_IPV4=yes
-EOF
-    
-    # Настройка VLAN-интерфейса
-    mkdir -p /etc/net/ifaces/"$INTERFACE_LAN"
-    cat > /etc/net/ifaces/"$INTERFACE_LAN"/options << EOF
-BOOTPROTO=static
-TYPE=eth
-DISABLED=no
-CONFIG_IPV4=yes
-VID=$VLAN_ID
-EOF
-    echo "$IP_LAN" > /etc/net/ifaces/"$INTERFACE_LAN"/ipv4address
-    echo "default via $DEFAULT_GW" > /etc/net/ifaces/"$INTERFACE_LAN"/ipv4route
-    
+
     systemctl restart network
     echo "Интерфейсы настроены."
 }
