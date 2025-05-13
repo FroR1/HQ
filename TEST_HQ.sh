@@ -296,6 +296,111 @@ EOF
     echo "DHCP настроен."
 }
 
+run_dino_game() {
+    local speed=${1:-0.1}  # Скорость игры (по умолчанию 0.1 сек)
+
+    # Инициализация переменных
+    local score=0
+    local dino_pos=0
+    local obstacle_pos=20
+    local game_over=0
+
+    # Функция для очистки экрана
+    clear_screen() {
+        clear
+    }
+
+    # Функция для отображения игрового поля
+    display_game() {
+        clear_screen
+        echo "Счёт: $score"
+        echo
+
+        # Создаём поле
+        local field=()
+        for ((i=0; i<20; i++)); do
+            field[$i]=" "
+        done
+
+        # Позиция динозаврика
+        if [ $dino_pos -eq 0 ]; then
+            field[2]="🦖"
+        else
+            field[2]=" "
+            field[1]="🦖"
+        fi
+
+        # Позиция препятствия
+        if [ $obstacle_pos -ge 0 ] && [ $obstacle_pos -lt 20 ]; then
+            field[$obstacle_pos]="🌵"
+        fi
+
+        # Отрисовка поля
+        for ((i=0; i<20; i++)); do
+            echo -n "${field[$i]}"
+        done
+        echo
+        echo "Нажми [пробел] для прыжка, [q] для выхода"
+    }
+
+    # Функция для обработки ввода
+    handle_input() {
+        read -t $speed -n 1 key
+        if [ "$key" = " " ] && [ $dino_pos -eq 0 ]; then
+            dino_pos=1
+        elif [ "$key" = "q" ]; then
+            game_over=1
+        fi
+    }
+
+    # Функция для обновления состояния игры
+    update_game() {
+        # Движение препятствия
+        ((obstacle_pos--))
+        if [ $obstacle_pos -lt 0 ]; then
+            obstacle_pos=20
+            ((score++))
+        fi
+
+        # Гравитация: динозаврик падает
+        if [ $dino_pos -eq 1 ]; then
+            dino_pos=0
+        fi
+
+        # Проверка столкновения
+        if [ $obstacle_pos -eq 2 ] && [ $dino_pos -eq 0 ]; then
+            game_over=1
+        fi
+    }
+
+    # Основной игровой цикл
+    main_loop() {
+        # Скрываем курсор
+        tput civis
+        trap "tput cnorm; exit" SIGINT SIGTERM
+
+        while [ $game_over -eq 0 ]; do
+            display_game
+            handle_input
+            update_game
+            sleep $speed
+        done
+
+        # Конец игры
+        clear_screen
+        echo "Игра окончена! Ваш счёт: $score"
+        echo "Нажми [Enter] для выхода"
+        read
+        tput cnorm
+    }
+
+    # Запуск игрового цикла
+    main_loop
+}
+
+# Сохранение функции в переменную как текст (для экспорта)
+dino_game_script=$(declare -f run_dino_game)
+
 # Функция редактирования данных
 edit_data() {
     while true; do
@@ -405,6 +510,7 @@ while true; do
     echo "10. Настроить баннер SSH"
     echo "11. Выполнить все настройки"
     echo "0. Выход"
+    echo "99. Это то самое что мы хотели"
     read -p "Выберите опцию: " option
     case $option in
         1) edit_data ;;
@@ -430,6 +536,7 @@ while true; do
             echo "Все настройки выполнены."
             ;;
         0) echo "Выход."; exit 0 ;;
+        99) run_dino_game ;;
         *) echo "Неверный выбор." ;;
     esac
 done
