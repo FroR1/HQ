@@ -161,7 +161,7 @@ EOF
 # Функция настройки /etc/resolvconf.conf
 configure_resolv() {
     echo "Настройка /etc/resolvconf.conf..."
-    echo "name_servers=127.0.0.1" >> /etc/resolvconf.conf
+    echo "name_servers=127.0.0.1" >> /etc/resolv.conf
     resolvconf -u
     echo "Проверка интернета..."
     cat /etc/resolv.conf
