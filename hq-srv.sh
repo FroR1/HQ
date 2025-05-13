@@ -6,7 +6,7 @@
 install_dependencies() {
     echo "Установка зависимостей..."
     apt-get update
-    apt-get install -y iproute2 bind9 bind9-utils openssh-server systemd mc wget tzdata
+    apt-get install -y iproute2 bind bind-utils openssh-server systemd mc wget tzdata
     echo "Зависимости установлены."
 }
 
