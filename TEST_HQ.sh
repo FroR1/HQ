@@ -340,31 +340,33 @@ edit_data() {
                IP_VLAN_MGMT=${input:-$IP_VLAN_MGMT} ;;
             10) read -p "Новый шлюз по умолчанию [$DEFAULT_GW]: " input
                 DEFAULT_GW=${input:-$DEFAULT_GW} ;;
-            11) read -p "Новый часовой пояс [$TIME_ZONE]: " input
+            11) read -p "Новый hostname [$HOSTNAME]: " input
+                HOSTNAME=${input:-$HOSTNAME} ;;
+            12) read -p "Новый часовой пояс [$TIME_ZONE]: " input
                 TIME_ZONE=${input:-$TIME_ZONE} ;;
-            12) read -p "Новое имя пользователя [$USERNAME]: " input
+            13) read -p "Новое имя пользователя [$USERNAME]: " input
                 USERNAME=${input:-$USERNAME} ;;
-            13) read -p "Новый UID пользователя [$USER_UID]: " input
+            14) read -p "Новый UID пользователя [$USER_UID]: " input
                 USER_UID=${input:-$USER_UID} ;;
-            14) read -p "Новый текст баннера [$BANNER_TEXT]: " input
+            15) read -p "Новый текст баннера [$BANNER_TEXT]: " input
                 BANNER_TEXT=${input:-$BANNER_TEXT} ;;
-            15) read -p "Новый локальный IP для туннеля [$TUNNEL_LOCAL_IP]: " input
+            16) read -p "Новый локальный IP для туннеля [$TUNNEL_LOCAL_IP]: " input
                 TUNNEL_LOCAL_IP=${input:-$TUNNEL_LOCAL_IP} ;;
-            16) read -p "Новый удаленный IP для туннеля [$TUNNEL_REMOTE_IP]: " input
+            17) read -p "Новый удаленный IP для туннеля [$TUNNEL_REMOTE_IP]: " input
                 TUNNEL_REMOTE_IP=${input:-$TUNNEL_REMOTE_IP} ;;
-            17) read -p "Новый IP для туннеля [$TUNNEL_IP]: " input
+            18) read -p "Новый IP для туннеля [$TUNNEL_IP]: " input
                 TUNNEL_IP=${input:-$TUNNEL_IP} ;;
-            18) read -p "Новый интерфейс для DHCP [$DHCP_INTERFACE]: " input
+            19) read -p "Новый интерфейс для DHCP [$DHCP_INTERFACE]: " input
                 DHCP_INTERFACE=${input:-$DHCP_INTERFACE} ;;
-            19) read -p "Новая подсеть для DHCP [$DHCP_SUBNET]: " input
+            20) read -p "Новая подсеть для DHCP [$DHCP_SUBNET]: " input
                 DHCP_SUBNET=${input:-$DHCP_SUBNET} ;;
-            20) read -p "Новая маска для DHCP [$DHCP_NETMASK]: " input
+            21) read -p "Новая маска для DHCP [$DHCP_NETMASK]: " input
                 DHCP_NETMASK=${input:-$DHCP_NETMASK} ;;
-            21) read -p "Новое начало диапазона DHCP [$DHCP_RANGE_START]: " input
+            22) read -p "Новое начало диапазона DHCP [$DHCP_RANGE_START]: " input
                 DHCP_RANGE_START=${input:-$DHCP_RANGE_START} ;;
-            22) read -p "Новый конец диапазона DHCP [$DHCP_RANGE_END]: " input
+            23) read -p "Новый конец диапазона DHCP [$DHCP_RANGE_END]: " input
                 DHCP_RANGE_END=${input:-$DHCP_RANGE_END} ;;
-            23) read -p "Новый DNS для DHCP [$DHCP_DNS]: " input
+            24) read -p "Новый DNS для DHCP [$DHCP_DNS]: " input
                 DHCP_DNS=${input:-$DHCP_DNS} ;;
             0) return ;;
             *) echo "Неверный выбор." ;;
