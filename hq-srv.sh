@@ -55,8 +55,8 @@ configure_interfaces() {
 configure_dns() {
     echo "Настройка DNS..."
     
-    apt-get install -y bind9 bind9-utils
-    systemctl enable --now bind9
+    apt-get install -y bind bind-utils
+    systemctl enable --now bind
     
     # Настройка зон в /etc/bind/named.conf.local
     cat > /etc/bind/named.conf.local << EOF
