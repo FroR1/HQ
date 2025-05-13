@@ -87,18 +87,32 @@ DISABLED=no
 CONFIG_IPV4=yes
 EOF
     
-    # Настройка VLAN интерфейсов
+   # Настройка VLAN интерфейсов
     for vlan in 100 200 999; do
         iface="${INTERFACE_VLAN_BASE}.$vlan"
-        ip_addr_var="IP_VLAN_${vlan}"
-        eval ip_addr=\$$ip_addr_var
+        # Сопоставление VLAN с переменной IP-адреса
+        case $vlan in
+            100) ip_addr="$IP_VLAN_SRV" ;;
+            200) ip_addr="$IP_VLAN_CLI" ;;
+            999) ip_addr="$IP_VLAN_MGMT" ;;
+            *) echo "Ошибка: Неизвестный VLAN $vlan"; exit 1 ;;
+        esac
+        
+        # Проверка, что IP-адрес определен
+        if [ -z "$ip_addr" ]; then
+            echo "Ошибка: IP-адрес для VLAN $vlan не определен."
+            exit 1
+        fi
+        
         mkdir -p /etc/net/ifaces/"$iface"
         cat > /etc/net/ifaces/"$iface"/options << EOF
 BOOTPROTO=static
-TYPE=eth
+TYPE=vlan
 DISABLED=no
 CONFIG_IPV4=yes
 VID=$vlan
+HOST=$INTERFACE_VLAN_BASE
+ONBOOT=yes
 EOF
         echo "$ip_addr" > /etc/net/ifaces/"$iface"/ipv4address
     done
@@ -106,6 +120,7 @@ EOF
     systemctl restart network
     echo "Интерфейсы настроены."
 }
+
 
 # Функция настройки GRE-туннеля через /etc/net/ifaces/
 configure_tunnel() {
