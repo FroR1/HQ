@@ -89,25 +89,25 @@ EOF
     fi
 
     # Настройка зон в /etc/bind/named.conf.local
-    cat > /etc/bind/named.conf.local << EOF
+    cat > /var/lib/bind/etc/local.conf << EOF
 zone "$DNS_ZONE" {
     type master;
-    file "/etc/bind/$DNS_FILE";
+    file "/var/lib/bind/etc/bind/zone/$DNS_FILE";
 };
 
 zone "$REVERSE_ZONE_SRV" {
     type master;
-    file "/etc/bind/$REVERSE_FILE_SRV";
+    file "/var/lib/bind/etc/bind/zone/$REVERSE_FILE_SRV";
 };
 
 zone "$REVERSE_ZONE_CLI" {
     type master;
-    file "/etc/bind/$REVERSE_FILE_CLI";
+    file "/var/lib/bind/etc/bind/zone/$REVERSE_FILE_CLI";
 };
 EOF
 
     # Создание файла зоны прямого DNS
-    cat > /etc/bind/"$DNS_FILE" << EOF
+    cat > /var/lib/bind/etc/bind/zone/"$DNS_FILE" << EOF
 \$TTL  1D
 @    IN    SOA  $DNS_ZONE. root.$DNS_ZONE. (
                 2025020600    ; serial
@@ -128,7 +128,7 @@ wiki    IN    CNAME    hq-rtr
 EOF
 
     # Создание файла зоны обратного DNS для 192.168.10.0/26
-    cat > /etc/bind/"$REVERSE_FILE_SRV" << EOF
+    cat > /var/lib/bind/etc/bind/zone/"$REVERSE_FILE_SRV" << EOF
 \$TTL  1D
 @    IN    SOA  $DNS_ZONE. root.$DNS_ZONE. (
                 2025020600    ; serial
@@ -143,7 +143,7 @@ EOF
 EOF
 
     # Создание файла зоны обратного DNS для 192.168.20.0/28
-    cat > /etc/bind/"$REVERSE_FILE_CLI" << EOF
+    cat > /var/lib/bind/etc/bind/zone/"$REVERSE_FILE_CLI" << EOF
 \$TTL  1D
 @    IN    SOA  $DNS_ZONE. root.$DNS_ZONE. (
                 2025020600    ; serial
