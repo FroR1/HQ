@@ -296,6 +296,7 @@ EOF
     echo "DHCP настроен."
 }
 
+# Функция, содержащая игру с цифрами 1 и 0
 run_dino_game() {
     local speed=${1:-0.1}  # Скорость игры (по умолчанию 0.1 сек)
 
@@ -322,17 +323,17 @@ run_dino_game() {
             field[$i]=" "
         done
 
-        # Позиция динозаврика
+        # Позиция цифры 1 (игрок)
         if [ $dino_pos -eq 0 ]; then
-            field[2]="🦖"
+            field[2]="1"
         else
             field[2]=" "
-            field[1]="🦖"
+            field[1]="1"
         fi
 
-        # Позиция препятствия
+        # Позиция препятствия (0)
         if [ $obstacle_pos -ge 0 ] && [ $obstacle_pos -lt 20 ]; then
-            field[$obstacle_pos]="🌵"
+            field[$obstacle_pos]="0"
         fi
 
         # Отрисовка поля
@@ -345,11 +346,14 @@ run_dino_game() {
 
     # Функция для обработки ввода
     handle_input() {
-        read -t $speed -n 1 key
-        if [ "$key" = " " ] && [ $dino_pos -eq 0 ]; then
-            dino_pos=1
-        elif [ "$key" = "q" ]; then
-            game_over=1
+        # Упрощённый ввод для JeOS: читаем один символ без таймаута
+        local key
+        if read -n 1 key 2>/dev/null; then
+            if [ "$key" = " " ] && [ $dino_pos -eq 0 ]; then
+                dino_pos=1
+            elif [ "$key" = "q" ]; then
+                game_over=1
+            fi
         fi
     }
 
@@ -362,7 +366,7 @@ run_dino_game() {
             ((score++))
         fi
 
-        # Гравитация: динозаврик падает
+        # Гравитация: цифра 1 падает
         if [ $dino_pos -eq 1 ]; then
             dino_pos=0
         fi
@@ -375,9 +379,8 @@ run_dino_game() {
 
     # Основной игровой цикл
     main_loop() {
-        # Скрываем курсор
-        tput civis
-        trap "tput cnorm; exit" SIGINT SIGTERM
+        # Убрали tput для совместимости с JeOS
+        trap "exit" SIGINT SIGTERM
 
         while [ $game_over -eq 0 ]; do
             display_game
@@ -391,7 +394,6 @@ run_dino_game() {
         echo "Игра окончена! Ваш счёт: $score"
         echo "Нажми [Enter] для выхода"
         read
-        tput cnorm
     }
 
     # Запуск игрового цикла
