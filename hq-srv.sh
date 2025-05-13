@@ -53,7 +53,6 @@ configure_interfaces() {
     # Настройка базового интерфейса
     mkdir -p /etc/net/ifaces/"$INTERFACE_LAN_BASE"
     cat > /etc/net/ifaces/"$INTERFACE_LAN_BASE"/options << EOF
-BOOTPROTO=none
 TYPE=eth
 DISABLED=no
 CONFIG_IPV4=yes
