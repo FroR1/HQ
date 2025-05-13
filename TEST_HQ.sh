@@ -14,6 +14,7 @@ install_dependencies
 
 # Начальные значения переменных
 INTERFACE_ISP="ens192"
+INTERFACE_VLAN_BASE="ens224"  # Физический интерфейс для VLAN (в сторону HQ-SRV, HQ-CLI, MGMT)
 INTERFACE_VLAN_SRV="ens224.100"
 INTERFACE_VLAN_CLI="ens224.200"
 INTERFACE_VLAN_MGMT="ens224.999"
@@ -64,7 +65,7 @@ configure_interfaces() {
     echo "Настройка интерфейсов через /etc/net/ifaces/..."
     
     check_interface "$INTERFACE_ISP"
-    check_interface "ens224"  # Базовый интерфейс для VLAN
+    check_interface "$INTERFACE_VLAN_BASE"  # Проверка базового интерфейса для VLAN
     
     # Настройка интерфейса ISP
     mkdir -p /etc/net/ifaces/"$INTERFACE_ISP"
@@ -78,8 +79,8 @@ EOF
     echo "default via $DEFAULT_GW" > /etc/net/ifaces/"$INTERFACE_ISP"/ipv4route
     
     # Настройка базового интерфейса для VLAN
-    mkdir -p /etc/net/ifaces/ens224
-    cat > /etc/net/ifaces/ens224/options << EOF
+    mkdir -p /etc/net/ifaces/"$INTERFACE_VLAN_BASE"
+    cat > /etc/net/ifaces/"$INTERFACE_VLAN_BASE"/options << EOF
 BOOTPROTO=none
 TYPE=eth
 DISABLED=no
@@ -88,7 +89,7 @@ EOF
     
     # Настройка VLAN интерфейсов
     for vlan in 100 200 999; do
-        iface="ens224.$vlan"
+        iface="${INTERFACE_VLAN_BASE}.$vlan"
         ip_addr_var="IP_VLAN_${vlan}"
         eval ip_addr=\$$ip_addr_var
         mkdir -p /etc/net/ifaces/"$iface"
@@ -286,51 +287,59 @@ edit_data() {
         clear
         echo "Текущие значения:"
         echo "1. Интерфейс к ISP: $INTERFACE_ISP"
-        echo "2. Интерфейс VLAN SRV: $INTERFACE_VLAN_SRV"
-        echo "3. Интерфейс VLAN CLI: $INTERFACE_VLAN_CLI"
-        echo "4. Интерфейс VLAN MGMT: $INTERFACE_VLAN_MGMT"
-        echo "5. IP для ISP: $IP_ISP"
-        echo "6. IP для VLAN SRV: $IP_VLAN_SRV"
-        echo "7. IP для VLAN CLI: $IP_VLAN_CLI"
-        echo "8. IP для VLAN MGMT: $IP_VLAN_MGMT"
-        echo "9. Шлюз по умолчанию: $DEFAULT_GW"
-        echo "10. Hostname: $HOSTNAME"
-        echo "11. Часовой пояс: $TIME_ZONE"
-        echo "12. Имя пользователя: $USERNAME"
-        echo "13. UID пользователя: $USER_UID"
-        echo "14. Текст баннера: $BANNER_TEXT"
-        echo "15. Локальный IP для туннеля: $TUNNEL_LOCAL_IP"
-        echo "16. Удаленный IP для туннеля: $TUNNEL_REMOTE_IP"
-        echo "17. IP для туннеля: $TUNNEL_IP"
-        echo "18. Интерфейс для DHCP: $DHCP_INTERFACE"
-        echo "19. Подсеть для DHCP: $DHCP_SUBNET"
-        echo "20. Маска для DHCP: $DHCP_NETMASK"
-        echo "21. Начало диапазона DHCP: $DHCP_RANGE_START"
-        echo "22. Конец диапазона DHCP: $DHCP_RANGE_END"
-        echo "23. DNS для DHCP: $DHCP_DNS"
+        echo "2. Базовый интерфейс для VLAN (в сторону HQ-SRV, HQ-CLI, MGMT): $INTERFACE_VLAN_BASE"
+        echo "3. Интерфейс VLAN SRV: $INTERFACE_VLAN_SRV"
+        echo "4. Интерфейс VLAN CLI: $INTERFACE_VLAN_CLI"
+        echo "5. Интерфейс VLAN MGMT: $INTERFACE_VLAN_MGMT"
+        echo "6. IP для ISP: $IP_ISP"
+        echo "7. IP для VLAN SRV: $IP_VLAN_SRV"
+        echo "8. IP для VLAN CLI: $IP_VLAN_CLI"
+        echo "9. IP для VLAN MGMT: $IP_VLAN_MGMT"
+        echo "10. Шлюз по умолчанию: $DEFAULT_GW"
+        echo "11. Hostname: $HOSTNAME"
+        echo "12. Часовой пояс: $TIME_ZONE"
+        echo "13. Имя пользователя: $USERNAME"
+        echo "14. UID пользователя: $USER_UID"
+        echo "15. Текст баннера: $BANNER_TEXT"
+        echo "16. Локальный IP для туннеля: $TUNNEL_LOCAL_IP"
+        echo "17. Удаленный IP для туннеля: $TUNNEL_REMOTE_IP"
+        echo "18. IP для туннеля: $TUNNEL_IP"
+        echo "19. Интерфейс для DHCP: $DHCP_INTERFACE"
+        echo "20. Подсеть для DHCP: $DHCP_SUBNET"
+        echo "21. Маска для DHCP: $DHCP_NETMASK"
+        echo "22. Начало диапазона DHCP: $DHCP_RANGE_START"
+        echo "23. Конец диапазона DHCP: $DHCP_RANGE_END"
+        echo "24. DNS для DHCP: $DHCP_DNS"
         echo "0. Назад"
         read -p "Введите номер параметра для изменения: " choice
         case $choice in
             1) read -p "Новый интерфейс к ISP [$INTERFACE_ISP]: " input
                INTERFACE_ISP=${input:-$INTERFACE_ISP} ;;
-            2) read -p "Новый интерфейс VLAN SRV [$INTERFACE_VLAN_SRV]: " input
+            2) read -p "Новый базовый интерфейс для VLAN [$INTERFACE_VLAN_BASE]: " input
+               new_base=${input:-$INTERFACE_VLAN_BASE}
+               if [ "$new_base" != "$INTERFACE_VLAN_BASE" ]; then
+                   INTERFACE_VLAN_BASE=$new_base
+                   INTERFACE_VLAN_SRV="$INTERFACE_VLAN_BASE.100"
+                   INTERFACE_VLAN_CLI="$INTERFACE_VLAN_BASE.200"
+                   INTERFACE_VLAN_MGMT="$INTERFACE_VLAN_BASE.999"
+                   DHCP_INTERFACE="$INTERFACE_VLAN_BASE.200"
+               fi ;;
+            3) read -p "Новый интерфейс VLAN SRV [$INTERFACE_VLAN_SRV]: " input
                INTERFACE_VLAN_SRV=${input:-$INTERFACE_VLAN_SRV} ;;
-            3) read -p "Новый интерфейс VLAN CLI [$INTERFACE_VLAN_CLI]: " input
+            4) read -p "Новый интерфейс VLAN CLI [$INTERFACE_VLAN_CLI]: " input
                INTERFACE_VLAN_CLI=${input:-$INTERFACE_VLAN_CLI} ;;
-            4) read -p "Новый интерфейс VLAN MGMT [$INTERFACE_VLAN_MGMT]: " input
+            5) read -p "Новый интерфейс VLAN MGMT [$INTERFACE_VLAN_MGMT]: " input
                INTERFACE_VLAN_MGMT=${input:-$INTERFACE_VLAN_MGMT} ;;
-            5) read -p "Новый IP для ISP [$IP_ISP]: " input
+            6) read -p "Новый IP для ISP [$IP_ISP]: " input
                IP_ISP=${input:-$IP_ISP} ;;
-            6) read -p "Новый IP для VLAN SRV [$IP_VLAN_SRV]: " input
+            7) read -p "Новый IP для VLAN SRV [$IP_VLAN_SRV]: " input
                IP_VLAN_SRV=${input:-$IP_VLAN_SRV} ;;
-            7) read -p "Новый IP для VLAN CLI [$IP_VLAN_CLI]: " input
+            8) read -p "Новый IP для VLAN CLI [$IP_VLAN_CLI]: " input
                IP_VLAN_CLI=${input:-$IP_VLAN_CLI} ;;
-            8) read -p "Новый IP для VLAN MGMT [$IP_VLAN_MGMT]: " input
+            9) read -p "Новый IP для VLAN MGMT [$IP_VLAN_MGMT]: " input
                IP_VLAN_MGMT=${input:-$IP_VLAN_MGMT} ;;
-            9) read -p "Новый шлюз по умолчанию [$DEFAULT_GW]: " input
-               DEFAULT_GW=${input:-$DEFAULT_GW} ;;
-            10) read -p "Новый hostname [$HOSTNAME]: " input
-                HOSTNAME=${input:-$HOSTNAME} ;;
+            10) read -p "Новый шлюз по умолчанию [$DEFAULT_GW]: " input
+                DEFAULT_GW=${input:-$DEFAULT_GW} ;;
             11) read -p "Новый часовой пояс [$TIME_ZONE]: " input
                 TIME_ZONE=${input:-$TIME_ZONE} ;;
             12) read -p "Новое имя пользователя [$USERNAME]: " input
