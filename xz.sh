@@ -1,10 +1,7 @@
 #!/bin/bash
 
-# === НАСТРОЙКИ ПО УМОЛЧАНИЮ ===
+# === ПЕРЕМЕННЫЕ ПО УМОЛЧАНИЮ (всё можно изменить через меню) ===
 HOSTNAME="hq-srv.au-team.irpo"
-IP_ADDR="192.168.10.20"
-NETMASK="255.255.255.240"
-GATEWAY="192.168.10.1"
 SSHUSER="sshuser"
 SSHUSER_UID="1010"
 SSHUSER_PASS="P@ssw0rd"
@@ -12,54 +9,103 @@ TZ="Asia/Yekaterinburg"
 SSH_PORT="2024"
 BANNER="Authorized access only"
 DNS_DOMAIN="au-team.irpo"
-DNS_PTR="10.168.192.in-addr.arpa"
+ZONE_FORWARD_FILE="test.db"
+ZONE_REV100_FILE="17216100.db"
+ZONE_REV200_FILE="17216200.db"
+ZONE_DIR="/var/lib/bind/etc/bind/zone"
+LOCAL_CONF="/var/lib/bind/etc/local.conf"
+NAMED_CONF="/var/lib/bind/etc/named.conf"
+REV_ZONE_100="100.16.172.in-addr.arpa"
+REV_ZONE_200="200.16.172.in-addr.arpa"
 
-# === ФУНКЦИИ ДЛЯ ВВОДА ДАННЫХ ===
+# PTR-записи (можно менять через меню)
+PTR_100_1="hq-rtr"
+PTR_100_2="hq-srv"
+PTR_200_10="hq-cli"
+
+# Остальные A-записи (можно менять через меню)
+A_HQ_RTR="172.16.100.1"
+A_BR_RTR="172.16.77.2"
+A_HQ_SRV="172.16.100.2"
+A_HQ_CLI="172.16.200.10"
+A_BR_SRV="172.16.15.2"
+
+# === ФУНКЦИИ ВВОДА ДАННЫХ ===
 function input_menu() {
     while true; do
         clear
         echo "=== Подменю ввода/изменения данных ==="
-        echo "1. Имя машины ($HOSTNAME)"
-        echo "2. IP-адрес ($IP_ADDR)"
-        echo "3. Маска сети ($NETMASK)"
-        echo "4. Шлюз ($GATEWAY)"
-        echo "5. Имя пользователя SSH ($SSHUSER)"
-        echo "6. UID пользователя SSH ($SSHUSER_UID)"
-        echo "7. Пароль пользователя SSH"
-        echo "8. Часовой пояс ($TZ)"
-        echo "9. Порт SSH ($SSH_PORT)"
-        echo "10. Баннер SSH"
-        echo "11. Домен DNS ($DNS_DOMAIN)"
-        echo "12. PTR-зона DNS ($DNS_PTR)"
-        echo "13. Изменить все параметры сразу"
-        echo "0. Назад"
+        echo " 1. Имя машины ($HOSTNAME)"
+        echo " 2. Имя пользователя SSH ($SSHUSER)"
+        echo " 3. UID пользователя SSH ($SSHUSER_UID)"
+        echo " 4. Пароль пользователя SSH"
+        echo " 5. Часовой пояс ($TZ)"
+        echo " 6. Порт SSH ($SSH_PORT)"
+        echo " 7. Баннер SSH"
+        echo " 8. Имя домена DNS ($DNS_DOMAIN)"
+        echo " 9. Имя файла прямой зоны ($ZONE_FORWARD_FILE)"
+        echo "10. Имя файла обратной зоны VLAN100 ($ZONE_REV100_FILE)"
+        echo "11. Имя файла обратной зоны VLAN200 ($ZONE_REV200_FILE)"
+        echo "12. Каталог зон ($ZONE_DIR)"
+        echo "13. PTR для 1 (VLAN100) ($PTR_100_1)"
+        echo "14. PTR для 2 (VLAN100) ($PTR_100_2)"
+        echo "15. PTR для 10 (VLAN200) ($PTR_200_10)"
+        echo "16. A-запись HQ-RTR ($A_HQ_RTR)"
+        echo "17. A-запись BR-RTR ($A_BR_RTR)"
+        echo "18. A-запись HQ-SRV ($A_HQ_SRV)"
+        echo "19. A-запись HQ-CLI ($A_HQ_CLI)"
+        echo "20. A-запись BR-SRV ($A_BR_SRV)"
+        echo "21. Название обратной зоны VLAN100 ($REV_ZONE_100)"
+        echo "22. Название обратной зоны VLAN200 ($REV_ZONE_200)"
+        echo "23. Изменить все параметры сразу"
+        echo " 0. Назад"
         read -p "Выберите пункт: " subchoice
         case "$subchoice" in
             1) read -p "Введите новое имя машины: " HOSTNAME ;;
-            2) read -p "Введите новый IP-адрес: " IP_ADDR ;;
-            3) read -p "Введите новую маску сети: " NETMASK ;;
-            4) read -p "Введите новый шлюз: " GATEWAY ;;
-            5) read -p "Введите новое имя пользователя SSH: " SSHUSER ;;
-            6) read -p "Введите новый UID пользователя SSH: " SSHUSER_UID ;;
-            7) read -s -p "Введите новый пароль пользователя SSH: " SSHUSER_PASS; echo ;;
-            8) read -p "Введите новый часовой пояс: " TZ ;;
-            9) read -p "Введите новый порт SSH: " SSH_PORT ;;
-            10) read -p "Введите новый баннер SSH: " BANNER ;;
-            11) read -p "Введите новый домен DNS: " DNS_DOMAIN ;;
-            12) read -p "Введите новую PTR-зону DNS: " DNS_PTR ;;
-            13)
+            2) read -p "Введите новое имя пользователя SSH: " SSHUSER ;;
+            3) read -p "Введите новый UID пользователя SSH: " SSHUSER_UID ;;
+            4) read -s -p "Введите новый пароль пользователя SSH: " SSHUSER_PASS; echo ;;
+            5) read -p "Введите новый часовой пояс: " TZ ;;
+            6) read -p "Введите новый порт SSH: " SSH_PORT ;;
+            7) read -p "Введите новый баннер SSH: " BANNER ;;
+            8) read -p "Введите новое имя домена DNS: " DNS_DOMAIN ;;
+            9) read -p "Введите имя файла прямой зоны: " ZONE_FORWARD_FILE ;;
+            10) read -p "Введите имя файла обратной зоны VLAN100: " ZONE_REV100_FILE ;;
+            11) read -p "Введите имя файла обратной зоны VLAN200: " ZONE_REV200_FILE ;;
+            12) read -p "Введите каталог зон: " ZONE_DIR ;;
+            13) read -p "Введите PTR для 1 (VLAN100): " PTR_100_1 ;;
+            14) read -p "Введите PTR для 2 (VLAN100): " PTR_100_2 ;;
+            15) read -p "Введите PTR для 10 (VLAN200): " PTR_200_10 ;;
+            16) read -p "Введите A-запись HQ-RTR: " A_HQ_RTR ;;
+            17) read -p "Введите A-запись BR-RTR: " A_BR_RTR ;;
+            18) read -p "Введите A-запись HQ-SRV: " A_HQ_SRV ;;
+            19) read -p "Введите A-запись HQ-CLI: " A_HQ_CLI ;;
+            20) read -p "Введите A-запись BR-SRV: " A_BR_SRV ;;
+            21) read -p "Введите название обратной зоны VLAN100: " REV_ZONE_100 ;;
+            22) read -p "Введите название обратной зоны VLAN200: " REV_ZONE_200 ;;
+            23)
                 read -p "Имя машины: " HOSTNAME
-                read -p "IP-адрес: " IP_ADDR
-                read -p "Маска сети: " NETMASK
-                read -p "Шлюз: " GATEWAY
                 read -p "Имя пользователя SSH: " SSHUSER
                 read -p "UID пользователя SSH: " SSHUSER_UID
                 read -s -p "Пароль пользователя SSH: " SSHUSER_PASS; echo
                 read -p "Часовой пояс: " TZ
                 read -p "Порт SSH: " SSH_PORT
                 read -p "Баннер SSH: " BANNER
-                read -p "Домен DNS: " DNS_DOMAIN
-                read -p "PTR-зона DNS: " DNS_PTR
+                read -p "Имя домена DNS: " DNS_DOMAIN
+                read -p "Имя файла прямой зоны: " ZONE_FORWARD_FILE
+                read -p "Имя файла обратной зоны VLAN100: " ZONE_REV100_FILE
+                read -p "Имя файла обратной зоны VLAN200: " ZONE_REV200_FILE
+                read -p "Каталог зон: " ZONE_DIR
+                read -p "PTR для 1 (VLAN100): " PTR_100_1
+                read -p "PTR для 2 (VLAN100): " PTR_100_2
+                read -p "PTR для 10 (VLAN200): " PTR_200_10
+                read -p "A-запись HQ-RTR: " A_HQ_RTR
+                read -p "A-запись BR-RTR: " A_BR_RTR
+                read -p "A-запись HQ-SRV: " A_HQ_SRV
+                read -p "A-запись HQ-CLI: " A_HQ_CLI
+                read -p "A-запись BR-SRV: " A_BR_SRV
+                read -p "Название обратной зоны VLAN100: " REV_ZONE_100
+                read -p "Название обратной зоны VLAN200: " REV_ZONE_200
                 ;;
             0) break ;;
             *) echo "Ошибка ввода"; sleep 1 ;;
@@ -70,7 +116,7 @@ function input_menu() {
 # === УСТАНОВКА ЗАВИСИМОСТЕЙ ===
 function install_deps() {
     apt-get update
-    apt-get install -y mc sudo openssh-server bind
+    apt-get install -y mc sudo openssh-server bind bind-utils
 }
 
 # === 1. Смена имени хоста ===
@@ -82,25 +128,7 @@ function set_hostname() {
     sleep 2
 }
 
-# === 2. Настройка IP-адресации ===
-function set_ip() {
-    IFACE=$(ip -o -4 route show to default | awk '{print $5}')
-    mkdir -p /etc/net/ifaces/$IFACE
-    cat > /etc/net/ifaces/$IFACE/options <<EOF
-BOOTPROTO=static
-ADDRESS=$IP_ADDR
-NETMASK=$NETMASK
-GATEWAY=$GATEWAY
-TYPE=eth
-DISABLED=no
-CONFIG_IPV4=yes
-EOF
-    systemctl restart network
-    echo "IP-адрес $IP_ADDR/$NETMASK установлен на $IFACE"
-    sleep 2
-}
-
-# === 3. Создание пользователя sshuser ===
+# === 2. Создание пользователя sshuser ===
 function create_sshuser() {
     id "$SSHUSER" &>/dev/null || useradd -u "$SSHUSER_UID" -m "$SSHUSER"
     echo "$SSHUSER:$SSHUSER_PASS" | chpasswd
@@ -110,7 +138,7 @@ function create_sshuser() {
     sleep 2
 }
 
-# === 4. Настройка SSH ===
+# === 3. Настройка SSH ===
 function config_ssh() {
     sed -i "s/^#*Port .*/Port $SSH_PORT/" /etc/ssh/sshd_config
     sed -i "s/^#*PermitRootLogin .*/PermitRootLogin no/" /etc/ssh/sshd_config
@@ -127,64 +155,102 @@ function config_ssh() {
     sleep 2
 }
 
-# === 5. Настройка DNS (bind) ===
+# === 4. Настройка DNS (bind, всё из переменных) ===
 function config_dns() {
-    systemctl enable named
-    systemctl start named
-    # Пример настройки зоны:
-    cat > /etc/namedb/named.conf.local <<EOF
+    echo "Настройка DNS (bind)"
+    apt-get update
+    apt-get install -y bind bind-utils
+
+    systemctl enable --now bind
+
+    mkdir -p "$ZONE_DIR"
+
+    # Конфиг зон
+    cat > "$LOCAL_CONF" <<EOF
 zone "$DNS_DOMAIN" {
     type master;
-    file "/etc/namedb/db.$DNS_DOMAIN";
+    file "$ZONE_FORWARD_FILE";
 };
-zone "$DNS_PTR" {
+
+zone "$REV_ZONE_100" {
     type master;
-    file "/etc/namedb/db.$DNS_PTR";
+    file "$ZONE_REV100_FILE";
+};
+zone "$REV_ZONE_200" {
+    type master;
+    file "$ZONE_REV200_FILE";
 };
 EOF
-    # Пример файла зоны:
-    cat > /etc/namedb/db.$DNS_DOMAIN <<EOF
-\$TTL    604800
-@       IN      SOA     $HOSTNAME. root.$DNS_DOMAIN. (
-                              2         ; Serial
-                         604800         ; Refresh
-                          86400         ; Retry
-                        2419200         ; Expire
-                         604800 )       ; Negative Cache TTL
-;
-@       IN      NS      $HOSTNAME.
-hq-srv  IN      A       $IP_ADDR
+
+    # Обратные зоны
+    cat > "$ZONE_DIR/$ZONE_REV100_FILE" <<EOF
+\$TTL  1D
+@    IN    SOA  $DNS_DOMAIN. root.$DNS_DOMAIN. (
+                2025020600    ; serial
+                12H           ; refresh
+                1H            ; retry
+                1W            ; expire
+                1H            ; ncache
+            )
+     IN    NS     $DNS_DOMAIN.
+1    IN    PTR    $PTR_100_1.$DNS_DOMAIN.
+2    IN    PTR    $PTR_100_2.$DNS_DOMAIN.
 EOF
-    # Пример PTR-зоны:
-    PTR_LAST=$(echo $IP_ADDR | awk -F. '{print $4}')
-    cat > /etc/namedb/db.$DNS_PTR <<EOF
-\$TTL    604800
-@       IN      SOA     $HOSTNAME. root.$DNS_PTR. (
-                              2         ; Serial
-                         604800         ; Refresh
-                          86400         ; Retry
-                        2419200         ; Expire
-                         604800 )       ; Negative Cache TTL
-;
-@       IN      NS      $HOSTNAME.
-$PTR_LAST IN PTR hq-srv.$DNS_DOMAIN.
+
+    cat > "$ZONE_DIR/$ZONE_REV200_FILE" <<EOF
+\$TTL  1D
+@    IN    SOA  $DNS_DOMAIN. root.$DNS_DOMAIN. (
+                2025020600    ; serial
+                12H           ; refresh
+                1H            ; retry
+                1W            ; expire
+                1H            ; ncache
+            )
+      IN    NS     $DNS_DOMAIN.
+10    IN    PTR    $PTR_200_10.$DNS_DOMAIN.
 EOF
-    systemctl restart named
-    echo "DNS-сервер настроен (bind)"
+
+    # Прямая зона
+    cat > "$ZONE_DIR/$ZONE_FORWARD_FILE" <<EOF
+\$TTL  1D
+@    IN    SOA  $DNS_DOMAIN. root.$DNS_DOMAIN. (
+                2025020600    ; serial
+                12H           ; refresh
+                1H            ; retry
+                1W            ; expire
+                1H            ; ncache
+            )
+        IN    NS       $DNS_DOMAIN.
+        IN    A        127.0.0.1
+hq-rtr  IN    A        $A_HQ_RTR
+br-rtr  IN    A        $A_BR_RTR
+hq-srv  IN    A        $A_HQ_SRV
+hq-cli  IN    A        $A_HQ_CLI
+br-srv  IN    A        $A_BR_SRV
+moodle  IN    CNAME    hq-rtr
+wiki    IN    CNAME    hq-rtr
+EOF
+
+    # Включаем local.conf в основной named.conf, если не включён
+    grep -q 'local.conf' "$NAMED_CONF" || echo "include \"$LOCAL_CONF\";" >> "$NAMED_CONF"
+
+    systemctl restart bind
+
+    echo "DNS-сервер (bind) настроен!"
     sleep 2
 }
 
-# === 6. Настройка часового пояса ===
+# === 5. Настройка часового пояса ===
 function set_timezone() {
     timedatectl set-timezone "$TZ"
     echo "Часовой пояс установлен: $TZ"
     sleep 2
 }
 
-# === 7. Настроить всё сразу ===
+# === 6. Настроить всё сразу ===
 function do_all() {
+    install_deps
     set_hostname
-    set_ip
     create_sshuser
     config_ssh
     config_dns
@@ -199,8 +265,8 @@ function main_menu() {
         clear
         echo "=== МЕНЮ НАСТРОЙКИ HQ-SRV ==="
         echo "1. Ввод/изменение данных"
-        echo "2. Сменить имя хоста"
-        echo "3. Настроить IP-адрес"
+        echo "2. Установить зависимости"
+        echo "3. Сменить имя хоста"
         echo "4. Создать пользователя SSH ($SSHUSER)"
         echo "5. Настроить SSH"
         echo "6. Настроить DNS (bind)"
@@ -210,8 +276,8 @@ function main_menu() {
         read -p "Выберите пункт: " choice
         case "$choice" in
             1) input_menu ;;
-            2) set_hostname ;;
-            3) set_ip ;;
+            2) install_deps ;;
+            3) set_hostname ;;
             4) create_sshuser ;;
             5) config_ssh ;;
             6) config_dns ;;
@@ -223,12 +289,9 @@ function main_menu() {
     done
 }
 
-# === ОСНОВНОЙ БЛОК ===
-
 if [ "$EUID" -ne 0 ]; then
     echo "Пожалуйста, запустите скрипт от root"
     exit 1
 fi
 
-install_deps
 main_menu
