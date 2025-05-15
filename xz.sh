@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Переменные
+# === НАСТРОЙКИ ПО УМОЛЧАНИЮ ===
 HOSTNAME="hq-srv.au-team.irpo"
 IP_ADDR="192.168.10.20"
 NETMASK="255.255.255.240"
@@ -11,14 +11,69 @@ SSHUSER_PASS="P@ssw0rd"
 TZ="Asia/Yekaterinburg"
 SSH_PORT="2024"
 BANNER="Authorized access only"
+DNS_DOMAIN="au-team.irpo"
+DNS_PTR="10.168.192.in-addr.arpa"
 
-# Установка зависимостей
+# === ФУНКЦИИ ДЛЯ ВВОДА ДАННЫХ ===
+function input_menu() {
+    while true; do
+        clear
+        echo "=== Подменю ввода/изменения данных ==="
+        echo "1. Имя машины ($HOSTNAME)"
+        echo "2. IP-адрес ($IP_ADDR)"
+        echo "3. Маска сети ($NETMASK)"
+        echo "4. Шлюз ($GATEWAY)"
+        echo "5. Имя пользователя SSH ($SSHUSER)"
+        echo "6. UID пользователя SSH ($SSHUSER_UID)"
+        echo "7. Пароль пользователя SSH"
+        echo "8. Часовой пояс ($TZ)"
+        echo "9. Порт SSH ($SSH_PORT)"
+        echo "10. Баннер SSH"
+        echo "11. Домен DNS ($DNS_DOMAIN)"
+        echo "12. PTR-зона DNS ($DNS_PTR)"
+        echo "13. Изменить все параметры сразу"
+        echo "0. Назад"
+        read -p "Выберите пункт: " subchoice
+        case "$subchoice" in
+            1) read -p "Введите новое имя машины: " HOSTNAME ;;
+            2) read -p "Введите новый IP-адрес: " IP_ADDR ;;
+            3) read -p "Введите новую маску сети: " NETMASK ;;
+            4) read -p "Введите новый шлюз: " GATEWAY ;;
+            5) read -p "Введите новое имя пользователя SSH: " SSHUSER ;;
+            6) read -p "Введите новый UID пользователя SSH: " SSHUSER_UID ;;
+            7) read -s -p "Введите новый пароль пользователя SSH: " SSHUSER_PASS; echo ;;
+            8) read -p "Введите новый часовой пояс: " TZ ;;
+            9) read -p "Введите новый порт SSH: " SSH_PORT ;;
+            10) read -p "Введите новый баннер SSH: " BANNER ;;
+            11) read -p "Введите новый домен DNS: " DNS_DOMAIN ;;
+            12) read -p "Введите новую PTR-зону DNS: " DNS_PTR ;;
+            13)
+                read -p "Имя машины: " HOSTNAME
+                read -p "IP-адрес: " IP_ADDR
+                read -p "Маска сети: " NETMASK
+                read -p "Шлюз: " GATEWAY
+                read -p "Имя пользователя SSH: " SSHUSER
+                read -p "UID пользователя SSH: " SSHUSER_UID
+                read -s -p "Пароль пользователя SSH: " SSHUSER_PASS; echo
+                read -p "Часовой пояс: " TZ
+                read -p "Порт SSH: " SSH_PORT
+                read -p "Баннер SSH: " BANNER
+                read -p "Домен DNS: " DNS_DOMAIN
+                read -p "PTR-зона DNS: " DNS_PTR
+                ;;
+            0) break ;;
+            *) echo "Ошибка ввода"; sleep 1 ;;
+        esac
+    done
+}
+
+# === УСТАНОВКА ЗАВИСИМОСТЕЙ ===
 function install_deps() {
     apt-get update
     apt-get install -y mc sudo openssh-server bind
 }
 
-# Смена имени хоста
+# === 1. Смена имени хоста ===
 function set_hostname() {
     echo "$HOSTNAME" > /etc/hostname
     hostnamectl set-hostname "$HOSTNAME"
@@ -27,23 +82,25 @@ function set_hostname() {
     sleep 2
 }
 
-# Настройка IP
+# === 2. Настройка IP-адресации ===
 function set_ip() {
     IFACE=$(ip -o -4 route show to default | awk '{print $5}')
     mkdir -p /etc/net/ifaces/$IFACE
-    echo "BOOTPROTO=static" > /etc/net/ifaces/$IFACE/options
-    echo "ADDRESS=$IP_ADDR" >> /etc/net/ifaces/$IFACE/options
-    echo "NETMASK=$NETMASK" >> /etc/net/ifaces/$IFACE/options
-    echo "GATEWAY=$GATEWAY" >> /etc/net/ifaces/$IFACE/options
-    echo "TYPE=eth" >> /etc/net/ifaces/$IFACE/options
-    echo "DISABLED=no" >> /etc/net/ifaces/$IFACE/options
-    echo "CONFIG_IPV4=yes" >> /etc/net/ifaces/$IFACE/options
+    cat > /etc/net/ifaces/$IFACE/options <<EOF
+BOOTPROTO=static
+ADDRESS=$IP_ADDR
+NETMASK=$NETMASK
+GATEWAY=$GATEWAY
+TYPE=eth
+DISABLED=no
+CONFIG_IPV4=yes
+EOF
     systemctl restart network
     echo "IP-адрес $IP_ADDR/$NETMASK установлен на $IFACE"
     sleep 2
 }
 
-# Создание пользователя sshuser
+# === 3. Создание пользователя sshuser ===
 function create_sshuser() {
     id "$SSHUSER" &>/dev/null || useradd -u "$SSHUSER_UID" -m "$SSHUSER"
     echo "$SSHUSER:$SSHUSER_PASS" | chpasswd
@@ -53,7 +110,7 @@ function create_sshuser() {
     sleep 2
 }
 
-# Настройка SSH
+# === 4. Настройка SSH ===
 function config_ssh() {
     sed -i "s/^#*Port .*/Port $SSH_PORT/" /etc/ssh/sshd_config
     sed -i "s/^#*PermitRootLogin .*/PermitRootLogin no/" /etc/ssh/sshd_config
@@ -70,58 +127,108 @@ function config_ssh() {
     sleep 2
 }
 
-# Настройка DNS (bind)
+# === 5. Настройка DNS (bind) ===
 function config_dns() {
     systemctl enable named
     systemctl start named
-    # Только создаём пустые шаблоны, как в методичке, без лишних записей
-    touch /etc/namedb/named.conf.local
-    touch /etc/namedb/db.au-team.irpo
-    touch /etc/namedb/db.10.168.192.in-addr.arpa
-    echo "DNS-сервер настроен (bind), шаблоны файлов созданы."
+    # Пример настройки зоны:
+    cat > /etc/namedb/named.conf.local <<EOF
+zone "$DNS_DOMAIN" {
+    type master;
+    file "/etc/namedb/db.$DNS_DOMAIN";
+};
+zone "$DNS_PTR" {
+    type master;
+    file "/etc/namedb/db.$DNS_PTR";
+};
+EOF
+    # Пример файла зоны:
+    cat > /etc/namedb/db.$DNS_DOMAIN <<EOF
+\$TTL    604800
+@       IN      SOA     $HOSTNAME. root.$DNS_DOMAIN. (
+                              2         ; Serial
+                         604800         ; Refresh
+                          86400         ; Retry
+                        2419200         ; Expire
+                         604800 )       ; Negative Cache TTL
+;
+@       IN      NS      $HOSTNAME.
+hq-srv  IN      A       $IP_ADDR
+EOF
+    # Пример PTR-зоны:
+    PTR_LAST=$(echo $IP_ADDR | awk -F. '{print $4}')
+    cat > /etc/namedb/db.$DNS_PTR <<EOF
+\$TTL    604800
+@       IN      SOA     $HOSTNAME. root.$DNS_PTR. (
+                              2         ; Serial
+                         604800         ; Refresh
+                          86400         ; Retry
+                        2419200         ; Expire
+                         604800 )       ; Negative Cache TTL
+;
+@       IN      NS      $HOSTNAME.
+$PTR_LAST IN PTR hq-srv.$DNS_DOMAIN.
+EOF
+    systemctl restart named
+    echo "DNS-сервер настроен (bind)"
     sleep 2
 }
 
-# Настройка часового пояса
+# === 6. Настройка часового пояса ===
 function set_timezone() {
     timedatectl set-timezone "$TZ"
     echo "Часовой пояс установлен: $TZ"
     sleep 2
 }
 
-# Меню
+# === 7. Настроить всё сразу ===
+function do_all() {
+    set_hostname
+    set_ip
+    create_sshuser
+    config_ssh
+    config_dns
+    set_timezone
+    echo "Все задания выполнены!"
+    sleep 2
+}
+
+# === МЕНЮ ===
 function main_menu() {
     while true; do
         clear
         echo "=== МЕНЮ НАСТРОЙКИ HQ-SRV ==="
-        echo "1. Установить зависимости"
+        echo "1. Ввод/изменение данных"
         echo "2. Сменить имя хоста"
         echo "3. Настроить IP-адрес"
         echo "4. Создать пользователя SSH ($SSHUSER)"
         echo "5. Настроить SSH"
-        echo "6. Настроить DNS (bind, шаблоны)"
+        echo "6. Настроить DNS (bind)"
         echo "7. Настроить часовой пояс"
         echo "8. Настроить всё сразу"
         echo "0. Выйти"
         read -p "Выберите пункт: " choice
         case "$choice" in
-            1) install_deps ;;
+            1) input_menu ;;
             2) set_hostname ;;
             3) set_ip ;;
             4) create_sshuser ;;
             5) config_ssh ;;
             6) config_dns ;;
             7) set_timezone ;;
-            8) install_deps; set_hostname; set_ip; create_sshuser; config_ssh; config_dns; set_timezone ;;
+            8) do_all ;;
             0) clear; exit 0 ;;
             *) echo "Ошибка ввода"; sleep 1 ;;
         esac
     done
 }
 
+# === ОСНОВНОЙ БЛОК ===
+
 if [ "$EUID" -ne 0 ]; then
     echo "Пожалуйста, запустите скрипт от root"
     exit 1
 fi
 
+install_deps
 main_menu
