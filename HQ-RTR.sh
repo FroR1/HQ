@@ -15,14 +15,12 @@ install_dependencies
 # Начальные значения переменных
 INTERFACE_ISP="ens192"
 INTERFACE_VLAN_BASE="ens224"  # Физический интерфейс для VLAN (в сторону HQ-SRV, HQ-CLI, MGMT)
-INTERFACE_VLAN_SRV="ens224.100"
-INTERFACE_VLAN_CLI="ens224.200"
-INTERFACE_VLAN_MGMT="ens224.999"
-IP_ISP="172.16.4.2/28"
+VLAN_SRV_ID="100"
+VLAN_CLI_ID="200"
+VLAN_MGMT_ID="999"
 IP_VLAN_SRV="192.168.10.1/26"
 IP_VLAN_CLI="192.168.20.1/28"
 IP_VLAN_MGMT="192.168.99.1/29"
-DEFAULT_GW="172.16.4.1"
 HOSTNAME="hq-rtr.au-team.irpo"
 TIME_ZONE="Asia/Novosibirsk"
 USERNAME="net_admin"
@@ -32,7 +30,7 @@ TUNNEL_LOCAL_IP="172.16.4.2"
 TUNNEL_REMOTE_IP="172.16.5.2"
 TUNNEL_IP="172.16.100.1/28"
 TUNNEL_NAME="gre1"
-DHCP_INTERFACE="ens224.200"
+DHCP_VLAN_CLI="${INTERFACE_VLAN_BASE}.${VLAN_CLI_ID}"
 DHCP_SUBNET="192.168.20.0"
 DHCP_NETMASK="255.255.255.240"
 DHCP_RANGE_START="192.168.20.10"
@@ -75,26 +73,24 @@ TYPE=eth
 DISABLED=no
 CONFIG_IPV4=yes
 EOF
-    echo "$IP_ISP" > /etc/net/ifaces/"$INTERFACE_ISP"/ipv4address
-    echo "default via $DEFAULT_GW" > /etc/net/ifaces/"$INTERFACE_ISP"/ipv4route
     
     # Настройка базового интерфейса для VLAN
     mkdir -p /etc/net/ifaces/"$INTERFACE_VLAN_BASE"
     cat > /etc/net/ifaces/"$INTERFACE_VLAN_BASE"/options << EOF
-BOOTPROTO=none
+BOOTPROTO=static
 TYPE=eth
 DISABLED=no
 CONFIG_IPV4=yes
 EOF
     
-   # Настройка VLAN интерфейсов
-    for vlan in 100 200 999; do
+    # Настройка VLAN интерфейсов
+    for vlan in "$VLAN_SRV_ID" "$VLAN_CLI_ID" "$VLAN_MGMT_ID"; do
         iface="${INTERFACE_VLAN_BASE}.$vlan"
         # Сопоставление VLAN с переменной IP-адреса
         case $vlan in
-            100) ip_addr="$IP_VLAN_SRV" ;;
-            200) ip_addr="$IP_VLAN_CLI" ;;
-            999) ip_addr="$IP_VLAN_MGMT" ;;
+            "$VLAN_SRV_ID") ip_addr="$IP_VLAN_SRV" ;;
+            "$VLAN_CLI_ID") ip_addr="$IP_VLAN_CLI" ;;
+            "$VLAN_MGMT_ID") ip_addr="$IP_VLAN_MGMT" ;;
             *) echo "Ошибка: Неизвестный VLAN $vlan"; exit 1 ;;
         esac
         
@@ -120,7 +116,6 @@ EOF
     systemctl restart network
     echo "Интерфейсы настроены."
 }
-
 
 # Функция настройки GRE-туннеля через /etc/net/ifaces/
 configure_tunnel() {
@@ -278,13 +273,13 @@ EOF
 configure_dhcp() {
     echo "Настройка DHCP..."
     apt-get install -y dhcp-server
-    sed -i "s/DHCPDARGS=.*/DHCPDARGS=$DHCP_INTERFACE/" /etc/sysconfig/dhcpd
+    sed -i "s/DHCPDARGS=.*/DHCPDARGS=$DHCP_VLAN_CLI/" /etc/sysconfig/dhcpd
     cat > /etc/dhcp/dhcpd.conf << EOF
 default-lease-time 6000;
 max-lease-time 72000;
 authoritative;
 
-# subnet for VLAN 200 (HQ-CLI)
+# subnet for VLAN $VLAN_CLI_ID (HQ-CLI)
 subnet $DHCP_SUBNET netmask $DHCP_NETMASK {
     range $DHCP_RANGE_START $DHCP_RANGE_END;
     option domain-name-servers $DHCP_DNS;
@@ -296,113 +291,6 @@ EOF
     echo "DHCP настроен."
 }
 
-# Функция, содержащая игру с цифрами 1 и 0
-run_dino_game() {
-    local speed=${1:-0.1}  # Скорость игры (по умолчанию 0.1 сек)
-
-    # Инициализация переменных
-    local score=0
-    local dino_pos=0
-    local obstacle_pos=20
-    local game_over=0
-
-    # Функция для очистки экрана
-    clear_screen() {
-        clear
-    }
-
-    # Функция для отображения игрового поля
-    display_game() {
-        clear_screen
-        echo "Счёт: $score"
-        echo
-
-        # Создаём поле
-        local field=()
-        for ((i=0; i<20; i++)); do
-            field[$i]=" "
-        done
-
-        # Позиция цифры 1 (игрок)
-        if [ $dino_pos -eq 0 ]; then
-            field[2]="1"
-        else
-            field[2]=" "
-            field[1]="1"
-        fi
-
-        # Позиция препятствия (0)
-        if [ $obstacle_pos -ge 0 ] && [ $obstacle_pos -lt 20 ]; then
-            field[$obstacle_pos]="0"
-        fi
-
-        # Отрисовка поля
-        for ((i=0; i<20; i++)); do
-            echo -n "${field[$i]}"
-        done
-        echo
-        echo "Нажми [пробел] для прыжка, [q] для выхода"
-    }
-
-    # Функция для обработки ввода
-    handle_input() {
-        # Упрощённый ввод для JeOS: читаем один символ без таймаута
-        local key
-        if read -n 1 key 2>/dev/null; then
-            if [ "$key" = " " ] && [ $dino_pos -eq 0 ]; then
-                dino_pos=1
-            elif [ "$key" = "q" ]; then
-                game_over=1
-            fi
-        fi
-    }
-
-    # Функция для обновления состояния игры
-    update_game() {
-        # Движение препятствия
-        ((obstacle_pos--))
-        if [ $obstacle_pos -lt 0 ]; then
-            obstacle_pos=20
-            ((score++))
-        fi
-
-        # Гравитация: цифра 1 падает
-        if [ $dino_pos -eq 1 ]; then
-            dino_pos=0
-        fi
-
-        # Проверка столкновения
-        if [ $obstacle_pos -eq 2 ] && [ $dino_pos -eq 0 ]; then
-            game_over=1
-        fi
-    }
-
-    # Основной игровой цикл
-    main_loop() {
-        # Убрали tput для совместимости с JeOS
-        trap "exit" SIGINT SIGTERM
-
-        while [ $game_over -eq 0 ]; do
-            display_game
-            handle_input
-            update_game
-            sleep $speed
-        done
-
-        # Конец игры
-        clear_screen
-        echo "Игра окончена! Ваш счёт: $score"
-        echo "Нажми [Enter] для выхода"
-        read
-    }
-
-    # Запуск игрового цикла
-    main_loop
-}
-
-# Сохранение функции в переменную как текст (для экспорта)
-dino_game_script=$(declare -f run_dino_game)
-
 # Функция редактирования данных
 edit_data() {
     while true; do
@@ -410,28 +298,25 @@ edit_data() {
         echo "Текущие значения:"
         echo "1. Интерфейс к ISP: $INTERFACE_ISP"
         echo "2. Базовый интерфейс для VLAN (в сторону HQ-SRV, HQ-CLI, MGMT): $INTERFACE_VLAN_BASE"
-        echo "3. Интерфейс VLAN SRV: $INTERFACE_VLAN_SRV"
-        echo "4. Интерфейс VLAN CLI: $INTERFACE_VLAN_CLI"
-        echo "5. Интерфейс VLAN MGMT: $INTERFACE_VLAN_MGMT"
-        echo "6. IP для ISP: $IP_ISP"
-        echo "7. IP для VLAN SRV: $IP_VLAN_SRV"
-        echo "8. IP для VLAN CLI: $IP_VLAN_CLI"
-        echo "9. IP для VLAN MGMT: $IP_VLAN_MGMT"
-        echo "10. Шлюз по умолчанию: $DEFAULT_GW"
-        echo "11. Hostname: $HOSTNAME"
-        echo "12. Часовой пояс: $TIME_ZONE"
-        echo "13. Имя пользователя: $USERNAME"
-        echo "14. UID пользователя: $USER_UID"
-        echo "15. Текст баннера: $BANNER_TEXT"
-        echo "16. Локальный IP для туннеля: $TUNNEL_LOCAL_IP"
-        echo "17. Удаленный IP для туннеля: $TUNNEL_REMOTE_IP"
-        echo "18. IP для туннеля: $TUNNEL_IP"
-        echo "19. Интерфейс для DHCP: $DHCP_INTERFACE"
-        echo "20. Подсеть для DHCP: $DHCP_SUBNET"
-        echo "21. Маска для DHCP: $DHCP_NETMASK"
-        echo "22. Начало диапазона DHCP: $DHCP_RANGE_START"
-        echo "23. Конец диапазона DHCP: $DHCP_RANGE_END"
-        echo "24. DNS для DHCP: $DHCP_DNS"
+        echo "3. ID VLAN SRV: $VLAN_SRV_ID"
+        echo "4. ID VLAN CLI (используется для DHCP): $VLAN_CLI_ID"
+        echo "5. ID VLAN MGMT: $VLAN_MGMT_ID"
+        echo "6. IP для VLAN SRV: $IP_VLAN_SRV"
+        echo "7. IP для VLAN CLI: $IP_VLAN_CLI"
+        echo "8. IP для VLAN MGMT: $IP_VLAN_MGMT"
+        echo "9. Hostname: $HOSTNAME"
+        echo "10. Часовой пояс: $TIME_ZONE"
+        echo "11. Имя пользователя: $USERNAME"
+        echo "12. UID пользователя: $USER_UID"
+        echo "13. Текст баннера: $BANNER_TEXT"
+        echo "14. Локальный IP для туннеля: $TUNNEL_LOCAL_IP"
+        echo "15. Удаленный IP для туннеля: $TUNNEL_REMOTE_IP"
+        echo "16. IP для туннеля: $TUNNEL_IP"
+        echo "17. Подсеть для DHCP: $DHCP_SUBNET"
+        echo "18. Маска для DHCP: $DHCP_NETMASK"
+        echo "19. Начало диапазона DHCP: $DHCP_RANGE_START"
+        echo "20. Конец диапазона DHCP: $DHCP_RANGE_END"
+        echo "21. DNS для DHCP: $DHCP_DNS"
         echo "0. Назад"
         read -p "Введите номер параметра для изменения: " choice
         case $choice in
@@ -441,54 +326,46 @@ edit_data() {
                new_base=${input:-$INTERFACE_VLAN_BASE}
                if [ "$new_base" != "$INTERFACE_VLAN_BASE" ]; then
                    INTERFACE_VLAN_BASE=$new_base
-                   INTERFACE_VLAN_SRV="$INTERFACE_VLAN_BASE.100"
-                   INTERFACE_VLAN_CLI="$INTERFACE_VLAN_BASE.200"
-                   INTERFACE_VLAN_MGMT="$INTERFACE_VLAN_BASE.999"
-                   DHCP_INTERFACE="$INTERFACE_VLAN_BASE.200"
+                   DHCP_VLAN_CLI="$INTERFACE_VLAN_BASE.$VLAN_CLI_ID"
                fi ;;
-            3) read -p "Новый интерфейс VLAN SRV [$INTERFACE_VLAN_SRV]: " input
-               INTERFACE_VLAN_SRV=${input:-$INTERFACE_VLAN_SRV} ;;
-            4) read -p "Новый интерфейс VLAN CLI [$INTERFACE_VLAN_CLI]: " input
-               INTERFACE_VLAN_CLI=${input:-$INTERFACE_VLAN_CLI} ;;
-            5) read -p "Новый интерфейс VLAN MGMT [$INTERFACE_VLAN_MGMT]: " input
-               INTERFACE_VLAN_MGMT=${input:-$INTERFACE_VLAN_MGMT} ;;
-            6) read -p "Новый IP для ISP [$IP_ISP]: " input
-               IP_ISP=${input:-$IP_ISP} ;;
-            7) read -p "Новый IP для VLAN SRV [$IP_VLAN_SRV]: " input
+            3) read -p "Новый ID VLAN SRV [$VLAN_SRV_ID]: " input
+               VLAN_SRV_ID=${input:-$VLAN_SRV_ID} ;;
+            4) read -p "Новый ID VLAN CLI [$VLAN_CLI_ID]: " input
+               VLAN_CLI_ID=${input:-$VLAN_CLI_ID}
+               DHCP_VLAN_CLI="$INTERFACE_VLAN_BASE.$VLAN_CLI_ID" ;;
+            5) read -p "Новый ID VLAN MGMT [$VLAN_MGMT_ID]: " input
+               VLAN_MGMT_ID=${input:-$VLAN_MGMT_ID} ;;
+            6) read -p "Новый IP для VLAN SRV [$IP_VLAN_SRV]: " input
                IP_VLAN_SRV=${input:-$IP_VLAN_SRV} ;;
-            8) read -p "Новый IP для VLAN CLI [$IP_VLAN_CLI]: " input
+            7) read -p "Новый IP для VLAN CLI [$IP_VLAN_CLI]: " input
                IP_VLAN_CLI=${input:-$IP_VLAN_CLI} ;;
-            9) read -p "Новый IP для VLAN MGMT [$IP_VLAN_MGMT]: " input
+            8) read -p "Новый IP для VLAN MGMT [$IP_VLAN_MGMT]: " input
                IP_VLAN_MGMT=${input:-$IP_VLAN_MGMT} ;;
-            10) read -p "Новый шлюз по умолчанию [$DEFAULT_GW]: " input
-                DEFAULT_GW=${input:-$DEFAULT_GW} ;;
-            11) read -p "Новый hostname [$HOSTNAME]: " input
-                HOSTNAME=${input:-$HOSTNAME} ;;
-            12) read -p "Новый часовой пояс [$TIME_ZONE]: " input
+            9) read -p "Новый hostname [$HOSTNAME]: " input
+               HOSTNAME=${input:-$HOSTNAME} ;;
+            10) read -p "Новый часовой пояс [$TIME_ZONE]: " input
                 TIME_ZONE=${input:-$TIME_ZONE} ;;
-            13) read -p "Новое имя пользователя [$USERNAME]: " input
+            11) read -p "Новое имя пользователя [$USERNAME]: " input
                 USERNAME=${input:-$USERNAME} ;;
-            14) read -p "Новый UID пользователя [$USER_UID]: " input
+            12) read -p "Новый UID пользователя [$USER_UID]: " input
                 USER_UID=${input:-$USER_UID} ;;
-            15) read -p "Новый текст баннера [$BANNER_TEXT]: " input
+            13) read -p "Новый текст баннера [$BANNER_TEXT]: " input
                 BANNER_TEXT=${input:-$BANNER_TEXT} ;;
-            16) read -p "Новый локальный IP для туннеля [$TUNNEL_LOCAL_IP]: " input
+            14) read -p "Новый локальный IP для туннеля [$TUNNEL_LOCAL_IP]: " input
                 TUNNEL_LOCAL_IP=${input:-$TUNNEL_LOCAL_IP} ;;
-            17) read -p "Новый удаленный IP для туннеля [$TUNNEL_REMOTE_IP]: " input
+            15) read -p "Новый удаленный IP для туннеля [$TUNNEL_REMOTE_IP]: " input
                 TUNNEL_REMOTE_IP=${input:-$TUNNEL_REMOTE_IP} ;;
-            18) read -p "Новый IP для туннеля [$TUNNEL_IP]: " input
+            16) read -p "Новый IP для туннеля [$TUNNEL_IP]: " input
                 TUNNEL_IP=${input:-$TUNNEL_IP} ;;
-            19) read -p "Новый интерфейс для DHCP [$DHCP_INTERFACE]: " input
-                DHCP_INTERFACE=${input:-$DHCP_INTERFACE} ;;
-            20) read -p "Новая подсеть для DHCP [$DHCP_SUBNET]: " input
+            17) read -p "Новая подсеть для DHCP [$DHCP_SUBNET]: " input
                 DHCP_SUBNET=${input:-$DHCP_SUBNET} ;;
-            21) read -p "Новая маска для DHCP [$DHCP_NETMASK]: " input
+            18) read -p "Новая маска для DHCP [$DHCP_NETMASK]: " input
                 DHCP_NETMASK=${input:-$DHCP_NETMASK} ;;
-            22) read -p "Новое начало диапазона DHCP [$DHCP_RANGE_START]: " input
+            19) read -p "Новое начало диапазона DHCP [$DHCP_RANGE_START]: " input
                 DHCP_RANGE_START=${input:-$DHCP_RANGE_START} ;;
-            23) read -p "Новый конец диапазона DHCP [$DHCP_RANGE_END]: " input
+            20) read -p "Новый конец диапазона DHCP [$DHCP_RANGE_END]: " input
                 DHCP_RANGE_END=${input:-$DHCP_RANGE_END} ;;
-            24) read -p "Новый DNS для DHCP [$DHCP_DNS]: " input
+            21) read -p "Новый DNS для DHCP [$DHCP_DNS]: " input
                 DHCP_DNS=${input:-$DHCP_DNS} ;;
             0) return ;;
             *) echo "Неверный выбор." ;;
@@ -512,7 +389,6 @@ while true; do
     echo "10. Настроить баннер SSH"
     echo "11. Выполнить все настройки"
     echo "0. Выход"
-    echo "99. Если стало скучно"
     read -p "Выберите опцию: " option
     case $option in
         1) edit_data ;;
@@ -538,7 +414,6 @@ while true; do
             echo "Все настройки выполнены."
             ;;
         0) echo "Выход."; exit 0 ;;
-        99) run_dino_game ;;
         *) echo "Неверный выбор." ;;
     esac
 done
