@@ -68,7 +68,7 @@ configure_interfaces() {
     # Настройка интерфейса ISP
     mkdir -p /etc/net/ifaces/"$INTERFACE_ISP"
     cat > /etc/net/ifaces/"$INTERFACE_ISP"/options << EOF
-BOOTPROTO=none
+BOOTPROTO=static
 TYPE=eth
 DISABLED=no
 CONFIG_IPV4=yes
@@ -77,7 +77,7 @@ EOF
     # Настройка базового интерфейса для VLAN
     mkdir -p /etc/net/ifaces/"$INTERFACE_VLAN_BASE"
     cat > /etc/net/ifaces/"$INTERFACE_VLAN_BASE"/options << EOF
-BOOTPROTO=none
+BOOTPROTO=static
 TYPE=eth
 DISABLED=no
 CONFIG_IPV4=yes
