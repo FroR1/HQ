@@ -15,11 +15,11 @@ install_dependencies
 # Начальные значения переменных
 INTERFACE_ISP="ens192"
 INTERFACE_VLAN_BASE="ens224"  # Физический интерфейс для VLAN (в сторону HQ-SRV, HQ-CLI, MGMT)
-VLAN_SRV_ID="100"
-VLAN_CLI_ID="200"
-VLAN_MGMT_ID="999"
-IP_VLAN_SRV="192.168.10.1/26"
-IP_VLAN_CLI="192.168.20.1/28"
+VLAN_SRV_ID="15"
+VLAN_CLI_ID="25"
+VLAN_MGMT_ID="99"
+IP_VLAN_SRV="192.168.15.1/26"
+IP_VLAN_CLI="192.168.25.1/28"
 IP_VLAN_MGMT="192.168.99.1/29"
 HOSTNAME="hq-rtr.au-team.irpo"
 TIME_ZONE="Asia/Novosibirsk"
