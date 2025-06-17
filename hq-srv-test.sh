@@ -178,7 +178,7 @@ function set_timezone() {
 function configure_dns() {
     echo "Настройка DNS..." | tee -a "$REPORT_FILE"
     systemctl enable --now bind9
-    cat > /etc/bind/named.conf.options <<EOF
+    cat > /etc/bind/options.conf <<EOF
 options {
     listen-on { any; };
     forward first;
@@ -186,7 +186,7 @@ options {
     allow-query { any; };
 };
 EOF
-    cat > /etc/bind/named.conf.local <<EOF
+    cat > /etc/bind/local.conf <<EOF
 zone "$DNS_ZONE" {
     type master;
     file "$DNS_FILE";
@@ -245,8 +245,8 @@ EOF
      IN    NS     $DNS_ZONE.
 10   IN    PTR    hq-cli.$DNS_ZONE.
 EOF
-    named-checkconf /etc/bind/named.conf.options
-    named-checkconf /etc/bind/named.conf.local
+    named-checkconf /etc/bind/options.conf
+    named-checkconf /etc/bind/local.conf
     named-checkzone "$DNS_ZONE" "$DNS_FILE"
     named-checkzone "$REVERSE_ZONE_SRV" "$REVERSE_FILE_SRV"
     named-checkzone "$REVERSE_ZONE_CLI" "$REVERSE_FILE_CLI"
