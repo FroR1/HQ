@@ -15,10 +15,10 @@ install_dependencies
 # Начальные значения переменных
 HOSTNAME="hq-srv.au-team.irpo"
 TIME_ZONE="Asia/Novosibirsk"
-USERNAME="net_admin"
+USERNAME="sshuser"
 USER_UID=1010
 BANNER_TEXT="Authorized access only"
-SSH_PORT=22
+SSH_PORT=3010
 DNS_ZONE="au-team.irpo"
 DNS_FILE="au-team.irpo.db"
 REVERSE_ZONE_SRV="10.168.192.in-addr.arpa"
