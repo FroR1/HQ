@@ -94,7 +94,7 @@ function input_menu() {
 function install_deps() {
     echo "Установка зависимостей..." | tee -a "$REPORT_FILE"
     apt-get update
-    apt-get install -y mc sudo openssh-server bind9 bind9-utils tzdata resolvconf
+    apt-get install -y mc sudo openssh-server bind bind-utils tzdata resolvconf
     echo "Зависимости установлены." | tee -a "$REPORT_FILE"
     sleep 2
 }
@@ -177,7 +177,7 @@ function set_timezone() {
 # === 6. Настройка DNS ===
 function configure_dns() {
     echo "Настройка DNS..." | tee -a "$REPORT_FILE"
-    systemctl enable --now bind9
+    systemctl enable --now bind
     cat > /etc/bind/named.conf.options <<EOF
 options {
     listen-on { any; };
@@ -186,7 +186,7 @@ options {
     allow-query { any; };
 };
 EOF
-    cat > /etc/bind/named.conf.local <<EOF
+    cat > /etc/bind/local.conf <<EOF
 zone "$DNS_ZONE" {
     type master;
     file "$DNS_FILE";
