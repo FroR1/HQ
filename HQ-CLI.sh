@@ -55,22 +55,10 @@ function set_timezone() {
     sleep 2
 }
 
-function yand() {
-    systemctl disable NetworkManager
-    mkdir /root/yandex-browser/
-    cd /root/yandex-browser/
-    wget https://download.yandex.ru/browser/alt-os/yandex-browser.rpm
-    rpm -i yandex-browser.rpm
-    clear
-    echo "Яндекс браузер установлен"
-    
-}
-
 # === 3. Настроить всё сразу ===
 function do_all() {
     set_hostname
     set_timezone
-    yand
     echo "Все задания выполнены!" | tee -a "$REPORT_FILE"
     sleep 2
 }
@@ -85,16 +73,14 @@ function main_menu() {
         echo "1. Ввод/изменение данных"
         echo "2. Сменить имя хоста"
         echo "3. Настроить часовой пояс"
-        echo "4. Настроить яндекс браузер"
-        echo "5. Настроить всё сразу"
+        echo "4. Настроить всё сразу"
         echo "0. Выйти"
         read -p "Выберите пункт: " choice
         case "$choice" in
             1) input_menu ;;
             2) set_hostname ;;
             3) set_timezone ;;
-            4) yand ;;
-            5) do_all ;;
+            4) do_all ;;
             0) clear; exit 0 ;;
             *) echo "Ошибка ввода"; sleep 1 ;;
         esac
