@@ -37,12 +37,10 @@ IP_BR_SRV="172.16.15.2"
 
 configure_interfaces(){
     # Настройка VLAN интерфейсов
-    for vlan in "$VLAN_SRV_ID" "$VLAN_CLI_ID" "$VLAN_MGMT_ID"; do
+    for vlan in "$VLAN_MGMT_ID"; do
         iface="${INTERFACE_VLAN_BASE}.$vlan"
         # Сопоставление VLAN с переменной IP-адреса
         case $vlan in
-            "$VLAN_SRV_ID") ip_addr="$IP_VLAN_SRV" ;;
-            "$VLAN_CLI_ID") ip_addr="$IP_VLAN_CLI" ;;
             "$VLAN_MGMT_ID") ip_addr="$IP_VLAN_MGMT" ;;
             *) echo "Ошибка: Неизвестный VLAN $vlan"; exit 1 ;;
         esac
