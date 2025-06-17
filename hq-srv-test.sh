@@ -267,8 +267,8 @@ $(echo $IP_HQ_CLI | cut -d. -f4)    IN    PTR    hq-cli.$DNS_ZONE.
 EOF
 
     # Проверка конфигурации
-    named-checkconf /etc/bind/named.conf.options
-    named-checkconf /etc/bind/named.conf.local
+    named-checkconf /etc/bind/options.conf
+    named-checkconf /etc/bind/options.conf
     named-checkzone "$DNS_ZONE" "$DNS_FILE"
     named-checkzone "$REVERSE_ZONE_SRV" "$REVERSE_FILE_SRV"
     named-checkzone "$REVERSE_ZONE_CLI" "$REVERSE_FILE_CLI"
