@@ -15,7 +15,7 @@ install_dependencies
 # Начальные значения переменных
 INTERFACE_VLAN_BASE="ens192"
 VLAN_MGMT_ID="99"
-IP_VLAN_MGMT="192.168.99.1/29"
+IP_VLAN_MGMT="192.168.99.2/29"
 HOSTNAME="hq-srv.au-team.irpo"
 TIME_ZONE="Asia/Novosibirsk"
 USERNAME="sshuser"
@@ -63,7 +63,7 @@ ONBOOT=yes
 EOF
         echo "$ip_addr" > /etc/net/ifaces/"$iface"/ipv4address
     done
-    
+        echo  default via 172.16.99.1 > /etc/net/ifaces/"$iface"/ipv4route  
     systemctl restart network
     echo "Интерфейсы настроены."
 }
