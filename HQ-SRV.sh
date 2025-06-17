@@ -140,7 +140,7 @@ EOF
 # Функция настройки /etc/resolvconf.conf
 configure_resolv() {
     echo "Настройка /etc/resolvconf.conf..."
-    echo "nameserver 127.0.0.1" >> /etc/resolv.conf
+    echo "nameserver 127.0.0.1" > /etc/resolv.conf
     echo "Проверка интернета..."
     echo "/etc/resolvconf.conf настроен и проверка интернета выполнена."
 }
