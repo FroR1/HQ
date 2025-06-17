@@ -57,10 +57,12 @@ function set_timezone() {
 
 function yand() {
     systemctl disable NetworkManager
-    mkdir /root/ya/
-    cd /root/ya/
+    mkdir /root/yandex-browser/
+    cd /root/yandex-browser/
     wget https://download.yandex.ru/browser/alt-os/yandex-browser.rpm
-    rpm -i yandex
+    rpm -i yandex-browser.rpm
+    clear
+    echo "Яндекс браузер установлен"
     
 }
 
