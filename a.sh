@@ -22,9 +22,9 @@ SSH_PORT=22
 DNS_ZONE="au-team.irpo"
 DNS_FILE="au-team.irpo.db"
 REVERSE_ZONE_SRV="10.168.192.in-addr.arpa"
-REVERSE_FILE_SRV="192.168.10.db"
+REVERSE_FILE_SRV="zonsrv.db"
 REVERSE_ZONE_CLI="20.168.192.in-addr.arpa"
-REVERSE_FILE_CLI="192.168.20.db"
+REVERSE_FILE_CLI="zoncli.db"
 IP_HQ_RTR="192.168.10.1"
 IP_HQ_SRV="192.168.10.2"
 IP_HQ_CLI="192.168.20.10"
@@ -82,17 +82,17 @@ EOF
     cat > /var/lib/bind/etc/local.conf << EOF
 zone "$DNS_ZONE" {
     type master;
-    file "/var/lib/bind/etc/bind/zone/$DNS_FILE";
+    file "$DNS_FILE";
 };
 
 zone "$REVERSE_ZONE_SRV" {
     type master;
-    file "/var/lib/bind/etc/bind/zone/$REVERSE_FILE_SRV";
+    file "$REVERSE_FILE_SRV";
 };
 
 zone "$REVERSE_ZONE_CLI" {
     type master;
-    file "/var/lib/bind/etc/bind/zone/$REVERSE_FILE_CLI";
+    file "$REVERSE_FILE_CLI";
 };
 EOF
 
