@@ -13,6 +13,9 @@ install_dependencies() {
 install_dependencies
 
 # Начальные значения переменных
+INTERFACE_VLAN_BASE="ens192"
+VLAN_MGMT_ID="99"
+IP_VLAN_MGMT="192.168.99.1/29"
 HOSTNAME="hq-srv.au-team.irpo"
 TIME_ZONE="Asia/Novosibirsk"
 USERNAME="sshuser"
@@ -30,6 +33,45 @@ IP_HQ_SRV="192.168.10.2"
 IP_HQ_CLI="192.168.20.10"
 IP_BR_RTR="172.16.77.2"
 IP_BR_SRV="172.16.15.2"
+
+
+configure_interfaces(){
+    # Настройка VLAN интерфейсов
+    for vlan in "$VLAN_SRV_ID" "$VLAN_CLI_ID" "$VLAN_MGMT_ID"; do
+        iface="${INTERFACE_VLAN_BASE}.$vlan"
+        # Сопоставление VLAN с переменной IP-адреса
+        case $vlan in
+            "$VLAN_SRV_ID") ip_addr="$IP_VLAN_SRV" ;;
+            "$VLAN_CLI_ID") ip_addr="$IP_VLAN_CLI" ;;
+            "$VLAN_MGMT_ID") ip_addr="$IP_VLAN_MGMT" ;;
+            *) echo "Ошибка: Неизвестный VLAN $vlan"; exit 1 ;;
+        esac
+        
+        # Проверка, что IP-адрес определен
+        if [ -z "$ip_addr" ]; then
+            echo "Ошибка: IP-адрес для VLAN $vlan не определен."
+            exit 1
+        fi
+        
+        mkdir -p /etc/net/ifaces/"$iface"
+        cat > /etc/net/ifaces/"$iface"/options << EOF
+BOOTPROTO=static
+TYPE=vlan
+DISABLED=no
+CONFIG_IPV4=yes
+VID=$vlan
+HOST=$INTERFACE_VLAN_BASE
+ONBOOT=yes
+EOF
+        echo "$ip_addr" > /etc/net/ifaces/"$iface"/ipv4address
+    done
+    
+    systemctl restart network
+    echo "Интерфейсы настроены."
+}
+
+
+
 
 # Функция настройки DNS (BIND)
 configure_dns() {
@@ -293,8 +335,10 @@ while true; do
             set_timezone
             configure_user
             configure_ssh
+            configure_interfaces
             echo "Все настройки выполнены."
             ;;
+        9) configure_interfaces ;;
         0) echo "Выход."; exit 0 ;;
         *) echo "Неверный выбор." ;;
     esac
