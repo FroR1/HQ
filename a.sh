@@ -55,7 +55,7 @@ configure_dns() {
     };
     logging {
         };
-    }; >> /etc/bind/options.conf
+    } >> /etc/bind/options.conf
 
 
     # Настройка зон в /etc/bind/local.conf
