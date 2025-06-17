@@ -22,16 +22,15 @@ SSH_PORT=22
 DNS_ZONE="au-team.irpo"
 DNS_FILE="au-team.irpo.db"
 REVERSE_ZONE_SRV="10.168.192.in-addr.arpa"
-REVERSE_FILE_SRV="19216810.db"
+REVERSE_FILE_SRV="192.168.10.db"
 REVERSE_ZONE_CLI="20.168.192.in-addr.arpa"
-REVERSE_FILE_CLI="19216820.db"
+REVERSE_FILE_CLI="192.168.20.db"
 IP_HQ_RTR="192.168.10.1"
 IP_HQ_SRV="192.168.10.2"
 IP_HQ_CLI="192.168.20.10"
 IP_BR_RTR="172.16.77.2"
 IP_BR_SRV="172.16.15.2"
 
-# Функция настройки DNS (BIND)
 # Функция настройки DNS (BIND)
 configure_dns() {
     echo "Настройка DNS..."
@@ -73,7 +72,7 @@ options {
     listen-on { any; };
     // listen-on-v6 { any; };
     forward first;
-    forwarders { 77.88.8.8; };
+    forwarders { 77>in-addr.arpa.db" contentType="text/plain">.88.8.8; };
     allow-query { any; };
 };
 EOF
@@ -162,6 +161,7 @@ EOF
 configure_resolv() {
     echo "Настройка /etc/resolvconf.conf..."
     echo "name_servers=127.0.0.1" >> /etc/resolv.conf
+    echo "nameserver 8.8.8.8" >> /etc/resolv.conf
     resolvconf -u
     echo "Проверка интернета..."
     cat /etc/resolv.conf
@@ -244,6 +244,8 @@ edit_data() {
         echo "10. IP для hq-cli: $IP_HQ_CLI"
         echo "11. IP для br-rtr: $IP_BR_RTR"
         echo "12. IP для br-srv: $IP_BR_SRV"
+        echo "13. Reverse зона для SRV: $REVERSE_ZONE_SRV"
+        echo "14. Reverse зона для CLI: $REVERSE_ZONE_CLI"
         echo "0. Назад"
         read -p "Введите номер параметра для изменения: " choice
         case $choice in
@@ -271,6 +273,10 @@ edit_data() {
                 IP_BR_RTR=${input:-$IP_BR_RTR} ;;
             12) read -p "Новый IP для br-srv [$IP_BR_SRV]: " input
                 IP_BR_SRV=${input:-$IP_BR_SRV} ;;
+            13) read -p "Новая Reverse зона для SRV [$REVERSE_ZONE_SRV]: " input
+                REVERSE_ZONE_SRV=${input:-$REVERSE_ZONE_SRV} ;;
+            14) read -p "Новая Reverse зона для CLI [$REVERSE_ZONE_CLI]: " input
+                REVERSE_ZONE_CLI=${input:-$REVERSE_ZONE_CLI} ;;
             0) return ;;
             *) echo "Неверный выбор." ;;
         esac
