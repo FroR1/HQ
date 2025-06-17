@@ -274,6 +274,7 @@ configure_dhcp() {
     echo "Настройка DHCP..."
     apt-get install -y dhcp-server
     sed -i "s/DHCPDARGS=.*/DHCPDARGS=$DHCP_VLAN_CLI/" /etc/sysconfig/dhcpd
+    systemctl enable --now dhcpd.service
     cat > /etc/dhcp/dhcpd.conf << EOF
 default-lease-time 6000;
 max-lease-time 72000;
@@ -287,7 +288,7 @@ subnet $DHCP_SUBNET netmask $DHCP_NETMASK {
     option routers $(echo $IP_VLAN_CLI | cut -d'/' -f1);
 }
 EOF
-    systemctl restart dhcpd
+    systemctl restart dhcpd.service
     echo "DHCP настроен."
 }
 
