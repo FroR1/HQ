@@ -149,7 +149,7 @@ EOF
 
     # Проверка синтаксиса зон
     named-checkconf /etc/bind/options.conf
-    named-checkconf /etc/bind/named.conf.local
+    named-checkconf /etc/bind/local.conf
     named-checkzone "$DNS_ZONE" /etc/bind/"$DNS_FILE"
     named-checkzone "$REVERSE_ZONE_SRV" /etc/bind/"$REVERSE_FILE_SRV"
     named-checkzone "$REVERSE_ZONE_CLI" /etc/bind/"$REVERSE_FILE_CLI"
