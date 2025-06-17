@@ -39,17 +39,6 @@ configure_dns() {
     systemctl enable --now bind
     
 
-    echo "Файл /etc/bind/options.conf не найден, создаю новый..."
-    cat > /etc/bind/options.conf << EOF
-options {
-    listen-on { any; };
-    // listen-on-v6 { any; };
-    forward first;
-    forwarders { 77.88.8.8; };
-    allow-query { any; };
-};
-EOF
-fi
 
 
     # Настройка зон в /etc/bind/local.conf
