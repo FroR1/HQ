@@ -193,6 +193,10 @@ configure_ssh() {
     
     # Настройка баннера SSH
     sed -i "s/^#*MaxAuthTries .*/MaxAuthTries 2/" /etc/openssh/sshd_config
+    sed -i "s/^#*PermitRootLogin .*/PermitRootLogin no/" /etc/openssh/sshd_config
+    grep -q "^AllowUsers" /etc/openssh/sshd_config && \
+    sed -i "s/^AllowUsers .*/AllowUsers $SSHUSER/" /etc/openssh/sshd_config || \
+    echo "AllowUsers $SSHUSER" >> /etc/openssh/sshd_config
     echo "$BANNER_TEXT" > /etc/banner
     if grep -q "^Banner" /etc/openssh/sshd_config; then
         sed -i 's|^Banner.*|Banner /etc/banner|' /etc/openssh/sshd_config
