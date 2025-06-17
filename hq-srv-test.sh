@@ -183,7 +183,7 @@ function configure_dns() {
     systemctl enable --now bind
 
     # Настройка named.conf.options
-    cat > /etc/bind/named.conf.options <<EOF
+    cat > /etc/bind/options.conf <<EOF
 options {
     directory "/var/cache/bind";
     listen-on { any; };
