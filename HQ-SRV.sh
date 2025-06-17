@@ -192,6 +192,7 @@ configure_ssh() {
     fi
     
     # Настройка баннера SSH
+    sed -i "s/^#*MaxAuthTries .*/MaxAuthTries 2/" /etc/openssh/sshd_config
     echo "$BANNER_TEXT" > /etc/banner
     if grep -q "^Banner" /etc/openssh/sshd_config; then
         sed -i 's|^Banner.*|Banner /etc/banner|' /etc/openssh/sshd_config
