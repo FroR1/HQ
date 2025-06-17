@@ -53,7 +53,7 @@ configure_dns() {
         forwarders { 77.88.8.8; };
         allow-query { any; };
         };
-        logging {
+    logging {
 
     };" > /etc/bind/options.conf
 
