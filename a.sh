@@ -37,8 +37,25 @@ configure_dns() {
     
     apt-get install -y bind bind-utils
     systemctl enable --now bind
-    
-
+    cd /etc/bind/
+    rm options.conf
+    touch options.conf
+    echo options {
+ version "unknown";
+ directory "/etc/bind/zone";
+ dump-file "/var/run/named/named_dump.db";
+ statistics-file "/var/run/named/named.stats";
+ recursing-file "/var/run/named/named.recursing";
+ secroots-file "/var/run/named/named.secroots";
+ pid-file none;
+ listen-on { any; };
+ forward first;
+ forwarders { 77.88.8.8; };
+ allow-query { any; };
+    };
+    logging {
+        };
+    }; >> /etc/bind/options.conf
 
 
     # Настройка зон в /etc/bind/local.conf
