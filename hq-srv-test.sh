@@ -13,11 +13,11 @@ IP_ADDR="192.168.10.2/26"
 GATEWAY="192.168.10.1"
 REPORT_FILE="/root/report.txt"
 DNS_ZONE="au-team.irpo"
-DNS_FILE="/var/lib/bind/etc/bind/zone/au-team.irpo.db"
+DNS_FILE="/var/cache/bind/zones/au-team.irpo.db"
 REVERSE_ZONE_SRV="10.168.192.in-addr.arpa"
-REVERSE_FILE_SRV="/var/lib/bind/etc/bind/zone/192.168.10.db"
+REVERSE_FILE_SRV="/var/cache/bind/zones/192.168.10.db"
 REVERSE_ZONE_CLI="20.168.192.in-addr.arpa"
-REVERSE_FILE_CLI="/var/lib/bind/etc/bind/zone/192.168.20.db"
+REVERSE_FILE_CLI="/var/cache/bind/zones/192.168.20.db"
 IP_HQ_RTR="192.168.10.1"
 IP_HQ_SRV="192.168.10.2"
 IP_HQ_CLI="192.168.20.10"
@@ -177,16 +177,26 @@ function set_timezone() {
 # === 6. Настройка DNS ===
 function configure_dns() {
     echo "Настройка DNS..." | tee -a "$REPORT_FILE"
+    
+    # Установка и активация сервиса bind
+    apt-get install -y bind bind-utils
     systemctl enable --now bind
+
+    # Настройка named.conf.options
     cat > /etc/bind/named.conf.options <<EOF
 options {
+    directory "/var/cache/bind";
     listen-on { any; };
     forward first;
-    forwarders { 77.88.8.8; };
+    forwarders { 77.88.8.8; 8.8.8.8; };
     allow-query { any; };
+    allow-transfer { none; };
+    recursion yes;
 };
 EOF
-    cat > /etc/bind/local.conf <<EOF
+
+    # Настройка named.conf.local
+    cat > /etc/bind/named.conf.local <<EOF
 zone "$DNS_ZONE" {
     type master;
     file "$DNS_FILE";
@@ -200,59 +210,83 @@ zone "$REVERSE_ZONE_CLI" {
     file "$REVERSE_FILE_CLI";
 };
 EOF
-    mkdir -p /var/lib/bind/etc/bind/zone
+
+    # Создание директории для зон
+    mkdir -p /var/cache/bind/zones
+    chown -R bind:bind /var/cache/bind
+    chmod -R 755 /var/cache/bind
+
+    # Создание файла прямой зоны
     cat > "$DNS_FILE" <<EOF
-\$TTL  1D
-@    IN    SOA  $DNS_ZONE. root.$DNS_ZONE. (
+\$TTL 1D
+@    IN    SOA  hq-srv.$DNS_ZONE. root.$DNS_ZONE. (
                 2025061600    ; serial
                 12H           ; refresh
                 1H            ; retry
                 1W            ; expire
-                1H            ; ncache
+                1H            ; minimum
             )
-        IN    NS       $DNS_ZONE.
+        IN    NS       hq-srv.$DNS_ZONE.
         IN    A        $IP_HQ_SRV
 hq-rtr  IN    A        $IP_HQ_RTR
 br-rtr  IN    A        $IP_BR_RTR
 hq-srv  IN    A        $IP_HQ_SRV
 hq-cli  IN    A        $IP_HQ_CLI
 br-srv  IN    A        $IP_BR_SRV
-moodle  IN    CNAME    hq-rtr
-wiki    IN    CNAME    hq-rtr
+moodle  IN    CNAME    hq-rtr.$DNS_ZONE.
+wiki    IN    CNAME    hq-rtr.$DNS_ZONE.
 EOF
+
+    # Создание файла обратной зоны для подсети 192.168.10.0/26
     cat > "$REVERSE_FILE_SRV" <<EOF
-\$TTL  1D
-@    IN    SOA  $DNS_ZONE. root.$DNS_ZONE. (
+\$TTL 1D
+@    IN    SOA  hq-srv.$DNS_ZONE. root.$DNS_ZONE. (
                 2025061600    ; serial
                 12H           ; refresh
                 1H            ; retry
                 1W            ; expire
-                1H            ; ncache
+                1H            ; minimum
             )
-     IN    NS     $DNS_ZONE.
-1    IN    PTR    hq-rtr.$DNS_ZONE.
-2    IN    PTR    hq-srv.$DNS_ZONE.
+        IN    NS       hq-srv.$DNS_ZONE.
+$(echo $IP_HQ_RTR | cut -d. -f4)    IN    PTR    hq-rtr.$DNS_ZONE.
+$(echo $IP_HQ_SRV | cut -d. -f4)    IN    PTR    hq-srv.$DNS_ZONE.
 EOF
+
+    # Создание файла обратной зоны для подсети 192.168.20.0/28
     cat > "$REVERSE_FILE_CLI" <<EOF
-\$TTL  1D
-@    IN    SOA  $DNS_ZONE. root.$DNS_ZONE. (
+\$TTL 1D
+@    IN    SOA  hq-srv.$DNS_ZONE. root.$DNS_ZONE. (
                 2025061600    ; serial
                 12H           ; refresh
                 1H            ; retry
                 1W            ; expire
-                1H            ; ncache
+                1H            ; minimum
             )
-     IN    NS     $DNS_ZONE.
-10   IN    PTR    hq-cli.$DNS_ZONE.
+        IN    NS       hq-srv.$DNS_ZONE.
+$(echo $IP_HQ_CLI | cut -d. -f4)    IN    PTR    hq-cli.$DNS_ZONE.
 EOF
+
+    # Проверка конфигурации
     named-checkconf /etc/bind/named.conf.options
     named-checkconf /etc/bind/named.conf.local
     named-checkzone "$DNS_ZONE" "$DNS_FILE"
     named-checkzone "$REVERSE_ZONE_SRV" "$REVERSE_FILE_SRV"
     named-checkzone "$REVERSE_ZONE_CLI" "$REVERSE_FILE_CLI"
-    systemctl restart bind9
-    echo "name_servers=127.0.0.1" > /etc/resolv.conf
+
+    # Перезапуск сервиса bind
+    systemctl restart bind
+    if systemctl is-active --quiet bind; then
+        echo "Сервис bind успешно запущен." | tee -a "$REPORT_FILE"
+    else
+        echo "Ошибка: Сервис bind не запустился." | tee -a "$REPORT_FILE"
+        exit 1
+    fi
+
+    # Настройка resolv.conf
+    echo "nameserver 127.0.0.1" > /etc/resolv.conf
+    chattr +i /etc/resolv.conf  # Защита от перезаписи
     resolvconf -u
+
     echo "DNS настроен." | tee -a "$REPORT_FILE"
     sleep 2
 }
