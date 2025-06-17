@@ -40,22 +40,22 @@ configure_dns() {
     cd /etc/bind/
     rm options.conf
     touch options.conf
-    echo options {
- version "unknown";
- directory "/etc/bind/zone";
- dump-file "/var/run/named/named_dump.db";
- statistics-file "/var/run/named/named.stats";
- recursing-file "/var/run/named/named.recursing";
- secroots-file "/var/run/named/named.secroots";
- pid-file none;
- listen-on { any; };
- forward first;
- forwarders { 77.88.8.8; };
- allow-query { any; };
-    };
-    logging {
+    echo "options {
+        version \"unknown\";
+        directory \"/etc/bind/zone\";
+        dump-file \"/var/run/named/named_dump.db\";
+        statistics-file \"/var/run/named/named.stats\";
+        recursing-file \"/var/run/named/named.recursing\";
+        secroots-file \"/var/run/named/named.secroots\";
+        pid-file none;
+        listen-on { any; };
+        forward first;
+        forwarders { 77.88.8.8; };
+        allow-query { any; };
         };
-    } >> /etc/bind/options.conf
+        logging {
+
+    };" > /etc/bind/options.conf
 
 
     # Настройка зон в /etc/bind/local.conf
