@@ -56,10 +56,12 @@ function set_timezone() {
 }
 
 function yand() {
+    systemctl disable NetworkManager
     mkdir /root/ya/
     cd /root/ya/
     wget https://download.yandex.ru/browser/alt-os/yandex-browser.rpm
     rpm -i yandex
+    
 }
 
 # === 3. Настроить всё сразу ===
